@@ -1,0 +1,42 @@
+Screen {
+    background: $surface-darken-1;
+}
+
+#lists-view {
+    display: none;
+    scrollbar-gutter: stable;
+    width: auto;
+}
+
+ArchiveApp.-show-tree #lists-view {
+    display: block;
+    dock: left;
+    height: 100%;
+    max-width: 15%;
+    background: #212b37;
+}
+
+#lists-view {
+    overflow: auto scroll;
+    min-width: 100%;
+}
+#mail {
+    width: auto;
+}
+
+MailingList {
+    display: block;
+}
+
+Screen {
+    layout: vertical;
+}
+
+.box {
+    height: 1fr;
+    border: solid green;
+}
+
+.selected {
+    border: solid pink;
+}
