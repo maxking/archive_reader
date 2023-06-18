@@ -40,3 +40,7 @@ Screen {
 .selected {
     border: solid pink;
 }
+
+#mail-view {
+    width: 100%;
+}

@@ -49,7 +49,7 @@ class ArchiveApp(App):
         #     self.call_later(self.update_lists(hk_url))
         yield Vertical(Container(id="lists"), id="lists-view")
         yield Vertical(DataTable(id="mail"), id="mail-view")
-        yield
+
 
     async def on_input_submitted(self, message: Input.Submitted):
         await self.update_lists(message.value)
@@ -67,12 +67,14 @@ class ArchiveApp(App):
 
     async def on_button_pressed(self, event: Button.Pressed):
         mail_table = self.query_one("#mail", DataTable)
-        # mails.update(Text(f"Button pressed in {self.__class__.__name__}:\n {event.sender._data}"))
-        mail_table.add_columns("subject", "replies", "date,")
-        mlist_id = event.sender._data.get("name")
-        threads = await self.hk_server.threads(mlist_id)
+        mail_table.add_columns("Subject", "Replies", "Date")
+        threads = await self.hk_server.threads(event.sender._data.get("name"))
         for thread in threads:
-            mail_table.add_row(thread.get("subject"), thread.get("replies"), thread.get("date"))
+            mail_table.add_row(
+                thread.get("subject")[:100],
+                thread.get("replies_count"),
+                thread.get("date_active"),
+                )
 
 
 class MailingList(Button):
