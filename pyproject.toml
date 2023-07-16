@@ -23,3 +23,6 @@ build-backend = "pdm.backend"
 dependencies = [
     "textual-dev",
 ]
+
+[tool.pdm.scripts]
+start = {call = "archive_reader.app:main"}

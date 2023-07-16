@@ -198,3 +198,8 @@ class Thread(Static):
 
     async def _on_click(self, _: events.Click) -> None:
         self.post_message(self.Selected(self))
+
+
+def main():
+    app = ArchiveApp()
+    app.run()

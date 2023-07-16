@@ -1,5 +1,4 @@
-from .app import ArchiveApp
+from .app import main
 
 if __name__ == "__main__":
-    app = ArchiveApp()
-    app.run()
+    main()

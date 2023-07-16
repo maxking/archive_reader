@@ -12,5 +12,5 @@ To run the app, first you need to create a virtualenv and then finally install d
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -e .
+$ pdm run start
 ```
-
