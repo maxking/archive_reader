@@ -10,7 +10,7 @@ from textual.containers import ScrollableContainer, Vertical
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
-from textual.widgets import (Button, Input, ListItem, ListView,
+from textual.widgets import (Button, Footer, Input, ListItem, ListView,
                              LoadingIndicator, Markdown, Placeholder, Pretty,
                              SelectionList, Static)
 
@@ -49,7 +49,6 @@ class Email(ListItem):
     ListView:focus > ListItem.--highlight {
         background: $secondary-background-lighten-3 50%;
     }
-
     """
 
     def __init__(self, *args, email_contents=None, **kw):
@@ -71,7 +70,7 @@ class Email(ListItem):
 
 class ThreadReadScreen(Screen):
 
-    BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
+    BINDINGS = [("escape", "app.pop_screen", "Close thread")]
 
     def __init__(self, *args, thread=None, **kw):
         self.thread = thread
@@ -83,6 +82,7 @@ class ThreadReadScreen(Screen):
         yield header
         yield LoadingIndicator()
         yield ListView(id="thread-emails")
+        yield Footer()
 
     @work
     async def load_emails(self):
@@ -154,6 +154,7 @@ class MailingListAddScreen(Screen):
         yield Input(placeholder="https://")
         yield Static()
         yield MailingListChoose(id="pick-mailinglist")
+        yield Footer()
 
     @work(exclusive=True)
     async def update_mailinglists(self, base_url):
@@ -194,7 +195,7 @@ class ArchiveApp(App):
         yield Vertical(MailingLists(id="lists"), id="lists-view")
         yield LoadingIndicator()
         yield ListView(id="threads")
-        # yield Footer(id="footer")
+        yield Footer()
 
     def on_mount(self):
         self._hide_loading()
