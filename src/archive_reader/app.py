@@ -120,7 +120,7 @@ class ArchiveApp(App):
         """Compose our UI."""
         yield Header(id="Header")
         yield Vertical(MailingLists(id="lists"), id="lists-view")
-        yield ScrollableContainer(id="threads")
+        yield ListView(id="threads")
         yield Footer(id="footer")
 
     def action_add_mailinglist(self):
@@ -132,11 +132,11 @@ class ArchiveApp(App):
         self.push_screen(MailingListAddScreen(), get_lists)
 
     async def on_list_view_selected(self, item):
-        threads_container = self.query_one("#threads", ScrollableContainer)
+        threads_container = self.query_one("#threads", ListView)
         threads = await self.hk_server.threads(item.item.name)
         for thread in threads:
             with suppress(DuplicateIds):
-                threads_container.mount(
+                threads_container.append(
                     Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
                     )
 
@@ -173,7 +173,7 @@ class MailingList(ListItem):
         return self._data
 
 
-class Thread(Static):
+class Thread(ListItem):
     DEFAULT_CSS = """
     Thread {
         height: 3;
