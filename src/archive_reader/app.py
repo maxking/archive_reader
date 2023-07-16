@@ -11,40 +11,102 @@ from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
 from textual.widgets import (Button, Input, ListItem, ListView,
-                             LoadingIndicator, Placeholder, SelectionList,
-                             Static)
+                             LoadingIndicator, Markdown, Placeholder, Pretty,
+                             SelectionList, Static)
 
-from .hyperkitty import Hyperkitty
+from .hyperkitty import Hyperkitty, fetch_urls
 
+
+def rich_bold(in_string):
+    return f'[bold]{in_string}[/bold]'
 
 class Header(Placeholder):
     DEFAULT_CSS = """
     Header {
-        height: 2;
+        height: 3;
         dock: top;
     }
     """
 
-    text = reactive("Heading")
+    text = reactive("Archive Reader")
 
     def render(self) -> RenderableType:
         return self.text
 
-
-class Footer(Placeholder):
+class Email(ListItem):
     DEFAULT_CSS = """
-    Footer {
-        height: 2;
-        dock: bottom;
+    Email {
+        width: 1fr;
+        margin: 1 1;
+        height: auto;
     }
+    Label {
+        padding: 1 2;
+    }
+    ListView > ListItem.--highlight {
+        background: $secondary-background-lighten-3 20%;
+    }
+    ListView:focus > ListItem.--highlight {
+        background: $secondary-background-lighten-3 50%;
+    }
+
     """
 
+    def __init__(self, *args, email_contents=None, **kw):
+        super().__init__(*args, **kw)
+        self.email_contents = email_contents
+
+    def get(self, attr):
+        return self.email_contents.get(attr)
+
+    @property
+    def sender(self):
+        return f"{self.get('sender_name')}"
+
+    def compose(self):
+        yield Static(rich_bold(f'From: {self.sender}'))
+        yield Static(rich_bold(f'Date: {self.get("date")}'))
+        yield Static()
+        yield Static(self.get('content'))
+
 class ThreadReadScreen(Screen):
+
     BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
 
-    def compose(self) -> ComposeResult:
-        yield Static("You can read the thread in this page!")
+    def __init__(self, *args, thread=None, **kw):
+        self.thread = thread
+        super().__init__(*args, **kw)
 
+    def compose(self) -> ComposeResult:
+        header = Header()
+        header.text = self.thread.subject()
+        yield header
+        yield LoadingIndicator()
+        yield ListView(id="thread-emails")
+
+    @work
+    async def load_emails(self):
+        # TODO: Don't assume the requests are going to pass always!!!
+        replies, _ = await fetch_urls([self.thread.get('emails')], log)
+        reply_urls = [each.get('url') for each in replies[0].get('results')]
+        replies, _ = await fetch_urls(reply_urls)
+        reply_emails = [Email(email_contents=reply) for reply in replies]
+        self.add_emails(reply_emails)
+        self._hide_loading()
+
+    def add_emails(self, emails):
+        view = self.query_one('#thread-emails', ListView)
+        for email in emails:
+            view.append(email)
+
+    def on_mount(self):
+        self.load_emails()
+
+    def _show_loading(self):
+        self.query_one(LoadingIndicator).display = True
+
+    def _hide_loading(self):
+        self.query_one(LoadingIndicator).display = False
 
 
 class MailingListChoose(ScrollableContainer):
@@ -91,7 +153,6 @@ class MailingListAddScreen(Screen):
         yield Static("Hyperkitty Server URL", classes="label")
         yield Input(placeholder="https://")
         yield Static()
-        yield Button("Fetch", variant="primary")
         yield MailingListChoose(id="pick-mailinglist")
 
     @work(exclusive=True)
@@ -174,13 +235,7 @@ class ArchiveApp(App):
         if isinstance(item.item, MailingList):
             self.update_threads(item.item.name)
         elif isinstance(item.item, Thread):
-            self.push_screen(ThreadReadScreen())
-
-    async def on_data_table_cell_selected(self, selected):
-        thread_id, mlist_id = selected.cell_key.row_key.value.split(':')
-        emails = await self.hk_server.emails(thread_id=thread_id, mlist_id=mlist_id)
-
-
+            self.push_screen(ThreadReadScreen(thread=item.item))
 
 class MailingLists(ListView):
     def __init__(self, hk_server=None, *args, **kw):
@@ -227,11 +282,18 @@ class Thread(ListItem):
         super().__init__(*args, **kw)
         self.data = thread_data
 
-    def render(self):
-        return self.data.get('subject')
+    def get(self, attr):
+        return self.data.get(attr)
+
+    def subject(self):
+        return self.get('subject')
+
+    render = subject
 
     async def _on_click(self, _: events.Click) -> None:
         self.post_message(self.Selected(self))
+
+    # async def emails()
 
 
 def main():

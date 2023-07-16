@@ -1,7 +1,13 @@
+import asyncio
+
 import httpx
 
 from .schemas import EmailSchema, MailingListPage, ThreadsPage
 
+__all__ = [
+    'fetch_urls',
+    'Hyperkitty',
+]
 
 class Hyperkitty:
     """
@@ -58,3 +64,30 @@ class Hyperkitty:
             self._thread_emails[thread_id] = results.json().get("results")
             return self._thread_emails[thread_id]
         return {}
+
+
+
+async def fetch_urls(urls, logger=None):
+    success = []
+    failed = []
+    async with httpx.AsyncClient() as client:
+        tasks = []
+        for url in urls:
+            tasks.append(asyncio.ensure_future(client.get(url, follow_redirects=True)))
+
+        results = await asyncio.gather(*tasks)
+
+        for resp in results:
+            if resp.status_code == 200:
+               success.append(resp.json())
+            else:
+                logger(resp)
+                failed.append(resp)
+    return success, failed
+
+    # if results.status_code == 200:
+    #     return results.json()
+    # if logger:
+    #     logger(results.status_code)
+    #     logger(results)
+    # return {}
