@@ -55,8 +55,8 @@ class MailingListChoose(ScrollableContainer):
         """Message when a thread is clicked on, so that main app
         can handle the event by loading thread screen.
         """
-        def __init__(self, thread_data):
-            self.data = thread_data
+        def __init__(self, lists):
+            self.data = lists
             super().__init__()
 
     def on_mount(self) -> None:
@@ -69,6 +69,7 @@ class MailingListChoose(ScrollableContainer):
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "select_mailinglist":
             self.post_message(self.Selected(self.query_one(SelectionList).selected))
+            event.stop()
 
 
 class MailingListAddScreen(Screen):
@@ -87,12 +88,15 @@ class MailingListAddScreen(Screen):
         yield MailingListChoose(id="pick-mailinglist")
 
     async def on_input_submitted(self, message: Input.Submitted):
+        self.base_url = message.value
         self.hk_server = Hyperkitty(base_url=message.value)
         lists_json = await self.hk_server.lists()
         selection_list = self.query_one(SelectionList)
         for _, ml in lists_json.items():
             selection_list.add_option(( f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')))
 
+    def on_mailing_list_choose_selected(self, message):
+        self.dismiss((message.data, self.hk_server))
 
 class ArchiveApp(App):
     """Textual code browser app."""
@@ -114,19 +118,18 @@ class ArchiveApp(App):
 
     def compose(self) -> ComposeResult:
         """Compose our UI."""
-        hk_url = None if len(sys.argv) < 2 else sys.argv[1]
         yield Header(id="Header")
         yield Vertical(MailingLists(id="lists"), id="lists-view")
-        # yield URLInput(
-        #     placeholder="Enter Hyperkitty URL...",
-        # )
         yield ScrollableContainer(id="threads")
         yield Footer(id="footer")
 
     def action_add_mailinglist(self):
-        self.push_screen(MailingListAddScreen())
-
-        # self.query_one('#urlinput', URLInput).display = False
+        def get_lists(returns):
+            lists, hk_server, = returns
+            self.hk_server = hk_server
+            for ml in lists:
+                self.query_one(MailingLists).append(MailingList(ml))
+        self.push_screen(MailingListAddScreen(), get_lists)
 
     async def on_list_view_selected(self, item):
         threads_container = self.query_one("#threads", ScrollableContainer)
@@ -152,16 +155,22 @@ class MailingLists(ListView):
 
 
 class MailingList(ListItem):
+
+    DEFAULT_CSS = """
+    MailingList {
+        border: solid red;
+    }
+    """
     def __init__(self, data):
         self._data = data
         super().__init__()
 
     def render(self):
-        return self._data.get("name")
+        return self._data
 
     @property
     def name(self):
-        return self._data.get('name')
+        return self._data
 
 
 class Thread(Static):
