@@ -1,5 +1,3 @@
-
-import sys
 from contextlib import suppress
 
 from rich.console import RenderableType
@@ -11,7 +9,7 @@ from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
 from textual.widgets import (Button, Footer, Input, ListItem, ListView,
-                             LoadingIndicator, Markdown, Placeholder, Pretty,
+                             LoadingIndicator, Markdown, Placeholder,
                              SelectionList, Static)
 
 from .hyperkitty import Hyperkitty, fetch_urls
@@ -206,7 +204,7 @@ class ArchiveApp(App):
     CSS_PATH = "archiver.css"
     BINDINGS = [
         ("a", "add_mailinglist", "Add MailingList"),
-        ("d", "app.toggle_dark", "Toggle Dark mode"),
+        ("", "app.toggle_dark", "Toggle Dark mode"),
         ("s", "app.screenshot()", "Screenshot"),
         ("q", "quit", "Quit"),
     ]
@@ -340,5 +338,5 @@ class Thread(ListItem):
 
 
 def main():
-    app.run()
     app = ArchiveApp()
+    app.run()
