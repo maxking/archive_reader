@@ -269,6 +269,7 @@ class ArchiveApp(App):
 
 class MailingLists(ListView):
     """Represents the left side with Subscribed MailingLists."""
+
     def __init__(self, hk_server=None, *args, **kw):
         super().__init__(*args, **kw)
         self.hk_server = hk_server
@@ -279,7 +280,7 @@ class MailingList(ListItem):
 
     DEFAULT_CSS = """
     MailingList {
-        border: solid red;
+        padding: 1 1;
     }
     """
     def __init__(self, data):
@@ -302,7 +303,11 @@ class Thread(ListItem):
     Thread {
         height: 3;
         width: 1fr;
-        border: solid white;
+        layout: grid;
+        grid-size: 3;
+        grid-columns: 12fr 1fr 3fr;
+        content-align: left middle;
+        padding: 1 1;
     }
     """
     class Selected(Message):
@@ -323,12 +328,13 @@ class Thread(ListItem):
     def subject(self):
         return self.get('subject')
 
-    render = subject
+    def compose(self):
+        yield Static(self.subject())
+        yield Static(":speech_balloon: {}".format(self.data.get("replies_count")))
+        yield Static(":two-thirty: {}".format(self.data.get('date_active')))
 
     async def _on_click(self, _: events.Click) -> None:
         self.post_message(self.Selected(self))
-
-    # async def emails()
 
 
 def main():
