@@ -2,7 +2,8 @@
 import sys
 from contextlib import suppress
 
-from textual import events, log
+from rich.console import RenderableType
+from textual import events, log, work
 from textual._node_list import DuplicateIds
 from textual.app import App, ComposeResult
 from textual.containers import ScrollableContainer, Vertical
@@ -22,6 +23,11 @@ class Header(Placeholder):
         dock: top;
     }
     """
+
+    text = reactive("Heading")
+
+    def render(self) -> RenderableType:
+        return self.text
 
 
 class Footer(Placeholder):
@@ -87,13 +93,17 @@ class MailingListAddScreen(Screen):
         yield Button("Fetch", variant="primary")
         yield MailingListChoose(id="pick-mailinglist")
 
-    async def on_input_submitted(self, message: Input.Submitted):
-        self.base_url = message.value
-        self.hk_server = Hyperkitty(base_url=message.value)
+    @work(exclusive=True)
+    async def update_mailinglists(self, base_url):
+        self.hk_server = Hyperkitty(base_url=base_url)
         lists_json = await self.hk_server.lists()
         selection_list = self.query_one(SelectionList)
         for _, ml in lists_json.items():
             selection_list.add_option(( f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')))
+
+    async def on_input_submitted(self, message: Input.Submitted):
+        self.base_url = message.value
+        self.update_mailinglists(self.base_url)
 
     def on_mailing_list_choose_selected(self, message):
         self.dismiss((message.data, self.hk_server))
@@ -118,10 +128,10 @@ class ArchiveApp(App):
 
     def compose(self) -> ComposeResult:
         """Compose our UI."""
-        yield Header(id="Header")
+        yield Header(id="header")
         yield Vertical(MailingLists(id="lists"), id="lists-view")
         yield ListView(id="threads")
-        yield Footer(id="footer")
+        # yield Footer(id="footer")
 
     def action_add_mailinglist(self):
         def get_lists(returns):
@@ -131,17 +141,25 @@ class ArchiveApp(App):
                 self.query_one(MailingLists).append(MailingList(ml))
         self.push_screen(MailingListAddScreen(), get_lists)
 
+    @work()
+    async def update_threads(self, ml_name):
+        header = self.query_one("#header", Header)
+        header.text = ml_name
+        threads_container = self.query_one("#threads", ListView)
+        threads = await self.hk_server.threads(ml_name)
+        # First, clear the threads.
+        threads_container.clear()
+        # Then add all the new threads that were found.
+        for thread in threads:
+            with suppress(DuplicateIds):
+                threads_container.append(
+                    Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
+                    )
+
     async def on_list_view_selected(self, item):
-        log(item.item)
         # Handle the list item selected for MailingList.
         if isinstance(item.item, MailingList):
-            threads_container = self.query_one("#threads", ListView)
-            threads = await self.hk_server.threads(item.item.name)
-            for thread in threads:
-                with suppress(DuplicateIds):
-                    threads_container.append(
-                        Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
-                        )
+            self.update_threads(item.item.name)
         elif isinstance(item.item, Thread):
             self.push_screen(ThreadReadScreen())
 
