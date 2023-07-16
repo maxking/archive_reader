@@ -133,6 +133,7 @@ class ArchiveApp(App):
 
     async def on_list_view_selected(self, item):
         log(item.item)
+        # Handle the list item selected for MailingList.
         if isinstance(item.item, MailingList):
             threads_container = self.query_one("#threads", ListView)
             threads = await self.hk_server.threads(item.item.name)
@@ -141,13 +142,13 @@ class ArchiveApp(App):
                     threads_container.append(
                         Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
                         )
+        elif isinstance(item.item, Thread):
+            self.push_screen(ThreadReadScreen())
 
     async def on_data_table_cell_selected(self, selected):
         thread_id, mlist_id = selected.cell_key.row_key.value.split(':')
         emails = await self.hk_server.emails(thread_id=thread_id, mlist_id=mlist_id)
 
-    def on_thread_selected(self, message):
-        self.push_screen(ThreadReadScreen())
 
 
 class MailingLists(ListView):
