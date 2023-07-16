@@ -13,7 +13,8 @@ from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
 from textual.validation import ValidationResult, Validator
-from textual.widgets import Input, ListItem, ListView, Placeholder, Static
+from textual.widgets import (Button, Input, ListItem, ListView, Placeholder,
+                             Static)
 
 # logging.basicConfig(
 #     level="NOTSET",
@@ -61,6 +62,15 @@ class ThreadReadScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Static("You can read the thread in this page!")
 
+class MailingListAddScreen(Screen):
+    BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
+
+    def compose(self):
+        yield Static("Hyperkitty Server URL", classes="label")
+        yield Input(placeholder="https://")
+        yield Static()
+        yield Button("Fetch", variant="primary")
+
 
 class ArchiveApp(App):
     """Textual code browser app."""
@@ -68,6 +78,7 @@ class ArchiveApp(App):
     CSS_PATH = "archiver.css"
     BINDINGS = [
         ("q", "quit", "Quit"),
+        ("a", "add_mailinglist", "Add MailingList")
     ]
     TITLE = "Archive Reader"
     SUB_TITLE = "An app to reach Hyperkitty archives in Terminal!"
@@ -89,6 +100,9 @@ class ArchiveApp(App):
         )
         yield ScrollableContainer(id="threads")
         yield Footer(id="footer")
+
+    def action_add_mailinglist(self):
+        self.push_screen(MailingListAddScreen())
 
     async def on_input_submitted(self, message: Input.Submitted):
         await self.update_lists(message.value)
@@ -243,7 +257,3 @@ class Hyperkitty:
             self._thread_emails[thread_id] = results.json().get("results")
             return self._thread_emails[thread_id]
         return {}
-
-
-if __name__ == "__main__":
-    ArchiveApp().run()

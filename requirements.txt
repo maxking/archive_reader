@@ -1,2 +1,2 @@
-textual[dev]
+textual
 httpx
