@@ -10,8 +10,9 @@ from textual.containers import ScrollableContainer, Vertical
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
-from textual.widgets import (Button, Input, ListItem, ListView, Placeholder,
-                             SelectionList, Static)
+from textual.widgets import (Button, Input, ListItem, ListView,
+                             LoadingIndicator, Placeholder, SelectionList,
+                             Static)
 
 from .hyperkitty import Hyperkitty
 
@@ -130,8 +131,12 @@ class ArchiveApp(App):
         """Compose our UI."""
         yield Header(id="header")
         yield Vertical(MailingLists(id="lists"), id="lists-view")
+        yield LoadingIndicator()
         yield ListView(id="threads")
         # yield Footer(id="footer")
+
+    def on_mount(self):
+        self._hide_loading()
 
     def action_add_mailinglist(self):
         def get_lists(returns):
@@ -141,10 +146,17 @@ class ArchiveApp(App):
                 self.query_one(MailingLists).append(MailingList(ml))
         self.push_screen(MailingListAddScreen(), get_lists)
 
+    def _show_loading(self):
+        self.query_one(LoadingIndicator).display = True
+
+    def _hide_loading(self):
+        self.query_one(LoadingIndicator).display = False
+
     @work()
     async def update_threads(self, ml_name):
         header = self.query_one("#header", Header)
         header.text = ml_name
+        self._show_loading()
         threads_container = self.query_one("#threads", ListView)
         threads = await self.hk_server.threads(ml_name)
         # First, clear the threads.
@@ -155,6 +167,7 @@ class ArchiveApp(App):
                 threads_container.append(
                     Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
                     )
+        self._hide_loading()
 
     async def on_list_view_selected(self, item):
         # Handle the list item selected for MailingList.
