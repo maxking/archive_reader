@@ -132,13 +132,15 @@ class ArchiveApp(App):
         self.push_screen(MailingListAddScreen(), get_lists)
 
     async def on_list_view_selected(self, item):
-        threads_container = self.query_one("#threads", ListView)
-        threads = await self.hk_server.threads(item.item.name)
-        for thread in threads:
-            with suppress(DuplicateIds):
-                threads_container.append(
-                    Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
-                    )
+        log(item.item)
+        if isinstance(item.item, MailingList):
+            threads_container = self.query_one("#threads", ListView)
+            threads = await self.hk_server.threads(item.item.name)
+            for thread in threads:
+                with suppress(DuplicateIds):
+                    threads_container.append(
+                        Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
+                        )
 
     async def on_data_table_cell_selected(self, selected):
         thread_id, mlist_id = selected.cell_key.row_key.value.split(':')
