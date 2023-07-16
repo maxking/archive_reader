@@ -204,7 +204,7 @@ class ArchiveApp(App):
     CSS_PATH = "archiver.css"
     BINDINGS = [
         ("a", "add_mailinglist", "Add MailingList"),
-        ("", "app.toggle_dark", "Toggle Dark mode"),
+        ("d", "app.toggle_dark", "Toggle Dark mode"),
         ("s", "app.screenshot()", "Screenshot"),
         ("q", "quit", "Quit"),
     ]
