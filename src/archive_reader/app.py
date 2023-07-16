@@ -1,32 +1,19 @@
-import logging
-import sys
-from contextlib import contextmanager, suppress
 
-import httpx
-from rich.console import RenderableType
-from rich.traceback import Traceback
+import sys
+from contextlib import suppress
+
 from textual import events, log
 from textual._node_list import DuplicateIds
 from textual.app import App, ComposeResult
-from textual.containers import ScrollableContainer, Vertical, VerticalScroll
+from textual.containers import ScrollableContainer, Vertical
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
-from textual.validation import ValidationResult, Validator
 from textual.widgets import (Button, Input, ListItem, ListView, Placeholder,
-                             Static)
+                             SelectionList, Static)
 
-# logging.basicConfig(
-#     level="NOTSET",
-#     handlers=[TextualHandler()],
-# )
+from .hyperkitty import Hyperkitty
 
-@contextmanager
-def show_traceback(view):
-    try:
-        yield
-    except:
-        view.update(Traceback(theme="github-dark", width=None))
 
 class Header(Placeholder):
     DEFAULT_CSS = """
@@ -45,24 +32,51 @@ class Footer(Placeholder):
     }
     """
 
-
-class ColumnsContainer(VerticalScroll):
-    DEFAULT_CSS = """
-    ColumnsContainer {
-        width: 1fr;
-        height: 1fr;
-        border: solid white;
-    }
-    """
-
-
 class ThreadReadScreen(Screen):
     BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
 
     def compose(self) -> ComposeResult:
         yield Static("You can read the thread in this page!")
 
+
+
+class MailingListChoose(ScrollableContainer):
+    """Pick a mailing list from the available ones."""
+    DEFAULT_CSS = """
+    SelectionList {
+        padding: 1;
+        border: solid $accent;
+        width: 80%;
+        height: 80%;
+    }
+    """
+
+    class Selected(Message):
+        """Message when a thread is clicked on, so that main app
+        can handle the event by loading thread screen.
+        """
+        def __init__(self, thread_data):
+            self.data = thread_data
+            super().__init__()
+
+    def on_mount(self) -> None:
+        self.query_one(SelectionList).border_title = "Select Mailing lists to subscribe to"
+
+    def compose(self):
+        yield SelectionList()
+        yield Button("Subscribe Selected", variant="primary", id="select_mailinglist")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        if event.button.id == "select_mailinglist":
+            self.post_message(self.Selected(self.query_one(SelectionList).selected))
+
+
 class MailingListAddScreen(Screen):
+    DEFAULT_CSS = """
+    Screen {
+        align: center middle;
+    }
+    """
     BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
 
     def compose(self):
@@ -70,6 +84,14 @@ class MailingListAddScreen(Screen):
         yield Input(placeholder="https://")
         yield Static()
         yield Button("Fetch", variant="primary")
+        yield MailingListChoose(id="pick-mailinglist")
+
+    async def on_input_submitted(self, message: Input.Submitted):
+        self.hk_server = Hyperkitty(base_url=message.value)
+        lists_json = await self.hk_server.lists()
+        selection_list = self.query_one(SelectionList)
+        for _, ml in lists_json.items():
+            selection_list.add_option(( f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')))
 
 
 class ArchiveApp(App):
@@ -85,6 +107,7 @@ class ArchiveApp(App):
     SCREENS = {'threadview': ThreadReadScreen}
     show_tree = var(True)
 
+
     def watch_show_tree(self, show_tree: bool) -> None:
         """Called when show_tree is modified."""
         self.set_class(show_tree, "-show-tree")
@@ -94,39 +117,16 @@ class ArchiveApp(App):
         hk_url = None if len(sys.argv) < 2 else sys.argv[1]
         yield Header(id="Header")
         yield Vertical(MailingLists(id="lists"), id="lists-view")
-        yield URLInput(
-            placeholder="Enter Hyperkitty URL...",
-            validators=[HyperkittyUrlValidator()],
-        )
+        # yield URLInput(
+        #     placeholder="Enter Hyperkitty URL...",
+        # )
         yield ScrollableContainer(id="threads")
         yield Footer(id="footer")
 
     def action_add_mailinglist(self):
         self.push_screen(MailingListAddScreen())
 
-    async def on_input_submitted(self, message: Input.Submitted):
-        await self.update_lists(message.value)
         # self.query_one('#urlinput', URLInput).display = False
-
-    async def update_lists(self, hk_url):
-        self.hk_server = Hyperkitty(hk_url)
-        lists_view = self.query_one("#lists")
-        lists_view.hk_server = self.hk_server
-        lists_json = await self.hk_server.lists()
-        mailinglist_widget = self.query_one('#lists')
-        for _, mlist  in lists_json.items():
-            mailinglist_widget.append(MailingList(mlist))
-
-    # async def handle_selected(self, event):
-    #     mail_table = self.query_one("#threads", Threads)
-    #     mail_table.add_columns("Subject", "Replies", "Date")
-    #     threads = await self.hk_server.threads(event.button._data.get("name"))
-    #     for thread in threads:
-    #         mail_table.add_row(
-    #             thread.get("subject"),
-    #             thread.get("replies_count"),
-    #             thread.get("date_active"),
-    #             )
 
     async def on_list_view_selected(self, item):
         threads_container = self.query_one("#threads", ScrollableContainer)
@@ -143,17 +143,6 @@ class ArchiveApp(App):
 
     def on_thread_selected(self, message):
         self.push_screen(ThreadReadScreen())
-
-
-class HyperkittyUrlValidator(Validator):
-    def validate(self, value: str) -> ValidationResult:
-        # TODO: Validate using sync call to Hyperkitty since there isn't current
-        # support for async validation.
-        return self.success()
-
-
-class URLInput(Input):
-    ...
 
 
 class MailingLists(ListView):
@@ -200,60 +189,3 @@ class Thread(Static):
 
     async def _on_click(self, _: events.Click) -> None:
         self.post_message(self.Selected(self))
-
-
-class Hyperkitty:
-    """
-    Hyperkitty is a client for Hyperkitty. It returns objects that can be
-    used in the UI elements.
-
-    This is limiting in the fact that it takes in the base_url, which implies
-    it is linked to a single server.
-
-    :param base_url: Base URL for Hyperkitty Instance.
-    """
-
-    def __init__(self, base_url: str) -> None:
-        self.base_url = base_url
-        self._lists_json = {}
-        self._list_threads = {}
-        self._thread_emails = {}
-
-    async def lists(self):
-        """Return a list of MailingLists.
-
-        It will cache the results for next use, until :py:meth:`refresh` is
-        called on the HK instance.
-        """
-        if self._lists_json:
-            return self._lists_json
-
-        url = f"{self.base_url}/api/lists?format=json"
-        async with httpx.AsyncClient() as client:
-            results = (await client.get(url, follow_redirects=True))
-        if results.status_code == 200:
-            self._lists_json = {item.get("name"): item for item in results.json().get("results")}
-            return self._lists_json
-        return {}
-
-    async def threads(self, list_id: str):
-        if list_id in self._list_threads:
-            return self._list_threads[list_id]
-        url = self._lists_json[list_id].get("threads")
-        async with httpx.AsyncClient() as client:
-            results = (await client.get(url, follow_redirects=True))
-        if results.status_code == 200:
-            self._list_threads[list_id] = results.json().get("results")
-            return self._list_threads[list_id]
-        return {}
-
-    async def emails(self, mlist_id: str, thread_id: str):
-        url = f"{self.base_url}/api/lists/{mlist_id}/threads/{thread_id}?format=json"
-        if thread_id in self._thread_emails:
-            return self._thread_emails[thread_id]
-        async with httpx.AsyncClient() as client:
-            results = (await client.get(url, follow_redirects=True))
-        if results.status_code == 200:
-            self._thread_emails[thread_id] = results.json().get("results")
-            return self._thread_emails[thread_id]
-        return {}
