@@ -3,6 +3,15 @@ Archive Reader
 
 A terminal based archive reader for Hyperkitty, GNU Mailman's official archiver.
 
+Screenshots
+-----------
+
+![Page Add Mailinglist](screenshots/page_subscribe_mailinglist.svg)
+
+![Page View threads](screenshots/page_threads_list.svg)
+
+![Page Read Thread](screenshots/page_read_thread.svg)
+
 
 Hyperkitty Configuration
 ------------------------

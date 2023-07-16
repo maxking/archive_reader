@@ -205,8 +205,10 @@ class ArchiveApp(App):
 
     CSS_PATH = "archiver.css"
     BINDINGS = [
+        ("a", "add_mailinglist", "Add MailingList"),
+        ("d", "app.toggle_dark", "Toggle Dark mode"),
+        ("s", "app.screenshot()", "Screenshot"),
         ("q", "quit", "Quit"),
-        ("a", "add_mailinglist", "Add MailingList")
     ]
     TITLE = "Archive Reader"
     SUB_TITLE = "An app to reach Hyperkitty archives in Terminal!"
