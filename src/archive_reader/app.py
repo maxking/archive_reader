@@ -18,9 +18,16 @@ from .hyperkitty import Hyperkitty, fetch_urls
 
 
 def rich_bold(in_string):
+    """Add rich markup for bold to the input string."""
     return f'[bold]{in_string}[/bold]'
 
 class Header(Placeholder):
+    """A generic header class with configurable text.
+
+    You can set the text attribute on the class to update the content
+    and `text` attribute is a reactive element so it is updated without
+    any refresh or update operation.
+    """
     DEFAULT_CSS = """
     Header {
         height: 3;
@@ -34,6 +41,15 @@ class Header(Placeholder):
         return self.text
 
 class Email(ListItem):
+    """Email class represents rendering of a single Email.
+
+    This is currently used in the ThreadReadScreen() to render all the Emails
+    from the first one to the last one.
+
+    The JSON metadata from Hyperkitty is stored in the `email_contents` attr
+    of the instance. You can get the values of those using the `.get()` method.
+    """
+
     DEFAULT_CSS = """
     Email {
         width: 1fr;
@@ -60,6 +76,8 @@ class Email(ListItem):
 
     @property
     def sender(self):
+        """Return the sender name"""
+        # TODO: Return the sender's address too.
         return f"{self.get('sender_name')}"
 
     def compose(self):
@@ -68,8 +86,12 @@ class Email(ListItem):
         yield Static()
         yield Static(self.get('content'))
 
-class ThreadReadScreen(Screen):
 
+class ThreadReadScreen(Screen):
+    """The main screen to read Email threads.
+
+    This is composed of multiple Emails, which are embedded inside a listview.
+    """
     BINDINGS = [("escape", "app.pop_screen", "Close thread")]
 
     def __init__(self, *args, thread=None, **kw):
@@ -111,6 +133,7 @@ class ThreadReadScreen(Screen):
 
 class MailingListChoose(ScrollableContainer):
     """Pick a mailing list from the available ones."""
+
     DEFAULT_CSS = """
     SelectionList {
         padding: 1;
@@ -142,6 +165,12 @@ class MailingListChoose(ScrollableContainer):
 
 
 class MailingListAddScreen(Screen):
+    """A new screen where you can search and subscribe to MailingLists.
+
+    This page will take the server as the input and load all the mailing lists on
+    that server.
+    """
+
     DEFAULT_CSS = """
     Screen {
         align: center middle;
@@ -162,7 +191,7 @@ class MailingListAddScreen(Screen):
         lists_json = await self.hk_server.lists()
         selection_list = self.query_one(SelectionList)
         for _, ml in lists_json.items():
-            selection_list.add_option(( f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')))
+            selection_list.add_option((f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')))
 
     async def on_input_submitted(self, message: Input.Submitted):
         self.base_url = message.value
@@ -172,7 +201,7 @@ class MailingListAddScreen(Screen):
         self.dismiss((message.data, self.hk_server))
 
 class ArchiveApp(App):
-    """Textual code browser app."""
+    """Textual reader app to read Hyperkitty (GNU Mailman's official Archiver) email archives."""
 
     CSS_PATH = "archiver.css"
     BINDINGS = [
@@ -239,12 +268,14 @@ class ArchiveApp(App):
             self.push_screen(ThreadReadScreen(thread=item.item))
 
 class MailingLists(ListView):
+    """Represents the left side with Subscribed MailingLists."""
     def __init__(self, hk_server=None, *args, **kw):
         super().__init__(*args, **kw)
         self.hk_server = hk_server
 
 
 class MailingList(ListItem):
+    """Represents an item in the left sidebar with the MailingLists."""
 
     DEFAULT_CSS = """
     MailingList {
@@ -264,6 +295,9 @@ class MailingList(ListItem):
 
 
 class Thread(ListItem):
+    """Represents a thread on the Main screen.
+    """
+
     DEFAULT_CSS = """
     Thread {
         height: 3;
@@ -298,5 +332,5 @@ class Thread(ListItem):
 
 
 def main():
-    app = ArchiveApp()
     app.run()
+    app = ArchiveApp()
