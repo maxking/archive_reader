@@ -7,7 +7,7 @@ from rich.console import RenderableType
 from textual import events, log, work
 from textual._node_list import DuplicateIds
 from textual.app import App, ComposeResult
-from textual.containers import ScrollableContainer, Vertical
+from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
@@ -94,6 +94,16 @@ class ThreadReadScreen(Screen):
     This is composed of multiple Emails, which are embedded inside a listview.
     """
     BINDINGS = [("escape", "app.pop_screen", "Close thread")]
+    DEFAULT_CSS = """
+    .main {
+        layout: grid;
+        grid-size: 2;
+        grid-columns: 9fr 1fr;
+    }
+    .sender {
+        padding: 0 1;
+    }
+    """
 
     def __init__(self, *args, thread=None, **kw):
         self.thread = thread
@@ -104,7 +114,9 @@ class ThreadReadScreen(Screen):
         header.text = self.thread.subject()
         yield header
         yield LoadingIndicator()
-        yield ListView(id="thread-emails")
+        with Horizontal(classes="main"):
+            yield ListView(id="thread-emails")
+            yield ListView(id="thread-authors")
         yield Footer()
 
     @work
@@ -115,12 +127,18 @@ class ThreadReadScreen(Screen):
         replies, _ = await fetch_urls(reply_urls)
         reply_emails = [Email(email_contents=reply) for reply in replies]
         self.add_emails(reply_emails)
+        self.add_email_authors(reply_emails)
         self._hide_loading()
 
     def add_emails(self, emails):
         view = self.query_one('#thread-emails', ListView)
         for email in emails:
             view.append(email)
+
+    def add_email_authors(self, emails):
+        view = self.query_one('#thread-authors', ListView)
+        for email in emails:
+            view.append(ListItem(Static(email.sender, classes="sender")))
 
     def on_mount(self):
         self.load_emails()
