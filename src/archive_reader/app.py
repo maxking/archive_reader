@@ -1,5 +1,8 @@
 from contextlib import suppress
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
+import timeago
 from rich.console import RenderableType
 from textual import events, log, work
 from textual._node_list import DuplicateIds
@@ -305,7 +308,7 @@ class Thread(ListItem):
         width: 1fr;
         layout: grid;
         grid-size: 3;
-        grid-columns: 12fr 1fr 3fr;
+        grid-columns: 14fr 1fr 2fr;
         content-align: left middle;
         padding: 1 1;
     }
@@ -331,7 +334,9 @@ class Thread(ListItem):
     def compose(self):
         yield Static(self.subject())
         yield Static(":speech_balloon: {}".format(self.data.get("replies_count")))
-        yield Static(":two-thirty: {}".format(self.data.get('date_active')))
+        now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
+        thread_date = datetime.fromisoformat(self.data.get('date_active'))
+        yield Static(":two-thirty: {}".format(timeago.format(thread_date, now)))
 
     async def _on_click(self, _: events.Click) -> None:
         self.post_message(self.Selected(self))
