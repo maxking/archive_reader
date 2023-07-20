@@ -8,6 +8,7 @@ from textual import events, log, work
 from textual._node_list import DuplicateIds
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, ScrollableContainer, Vertical
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
@@ -366,11 +367,15 @@ class ArchiveApp(App):
         return True
 
     def _set_thread(self, thread):
-        threads_container = self.query_one("#threads", ListView)
+        try:
+            threads_container = self.query_one("#threads", ListView)
+        except NoMatches:
+            # This can potentially happen when we have switched to a different
+            # screen and we aren't able to find the `threads` in the current DOM.
+            return
         with suppress(DuplicateIds):
             widget = Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
             if widget not in threads_container.children:
-                # threads_container.children.
                 threads_container.append(widget)
 
     def _save_threads(self, ml, threads):
@@ -401,7 +406,13 @@ class ArchiveApp(App):
         list_threads = {}
         for thread in threads.get('results'):
             list_threads[thread.get('thread_id')] = thread
-            self._set_thread(thread)
+            try:
+                self._set_thread(thread)
+            except Exception:
+                # Exception raised here is usually due to having switched to
+                # a different screen and then trying to load the thread into
+                # a widget that is no longer in  view.
+                pass
         self._save_threads(ml.name, list_threads)
         if not loaded:
             # If the cached threads weren't loaded then hide those.
