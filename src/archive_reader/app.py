@@ -368,9 +368,10 @@ class ArchiveApp(App):
     def _set_thread(self, thread):
         threads_container = self.query_one("#threads", ListView)
         with suppress(DuplicateIds):
-            threads_container.append(
-                Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
-                )
+            widget = Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
+            if widget not in threads_container.children:
+                # threads_container.children.
+                threads_container.append(widget)
 
     def _save_threads(self, ml, threads):
         key = f'{ml}_threads'
@@ -389,10 +390,10 @@ class ArchiveApp(App):
     async def update_threads(self, ml):
         header = self.query_one("#header", Header)
         header.text = ml.name
-        self._show_loading()
         threads_container = self.query_one("#threads", ListView)
         # First, clear the threads.
         threads_container.clear()
+        self._show_loading()
         # loaded = was some new cached threads loaded.
         loaded = self._load_saved_threads(ml.name)
         threads = await hk.threads(ml._data)
@@ -412,6 +413,7 @@ class ArchiveApp(App):
             self.current_mailinglist = item.item
             self.update_threads(item.item)
         elif isinstance(item.item, Thread):
+            log(f'Thread {item.item} was selected.')
             self.push_screen(ThreadReadScreen(thread=item.item))
 
 class MailingLists(ListView):
