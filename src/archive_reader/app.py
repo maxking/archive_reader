@@ -231,6 +231,54 @@ class MailingListAddScreen(Screen):
     def on_mailing_list_choose_selected(self, message):
         self.dismiss((message.data, self.hk_server))
 
+
+class Thread(ListItem):
+    """Represents a thread on the Main screen.
+    """
+
+    DEFAULT_CSS = """
+    Thread {
+        height: 3;
+        width: 1fr;
+        layout: grid;
+        grid-size: 3;
+        grid-columns: 14fr 1fr 2fr;
+        content-align: left middle;
+        padding: 1 1;
+    }
+    """
+    class Selected(Message):
+        """Message when a thread is clicked on, so that main app
+        can handle the event by loading thread screen.
+        """
+        def __init__(self, thread_data):
+            self.data = thread_data
+            super().__init__()
+
+    def __init__(self, *args, thread_data=None, **kw) -> None:
+        super().__init__(*args, **kw)
+        self.data = thread_data
+
+    def get(self, attr):
+        return self.data.get(attr)
+
+    def subject(self):
+        return self.get('subject')
+
+    def time_format(self):
+        return datetime.fromisoformat(self.data.get('date_active'))
+
+    def compose(self):
+        yield Static(self.subject())
+        yield Static(":speech_balloon: {}".format(self.data.get("replies_count")))
+        now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
+        thread_date = self.time_format()
+        yield Static(":two-thirty: {}".format(timeago.format(thread_date, now)))
+
+    async def _on_click(self, _: events.Click) -> None:
+        self.post_message(self.Selected(self))
+
+
 class ArchiveApp(App):
     """Textual reader app to read Hyperkitty (GNU Mailman's official Archiver) email archives."""
 
@@ -330,53 +378,6 @@ class MailingList(ListItem):
     @property
     def name(self):
         return self._data
-
-
-class Thread(ListItem):
-    """Represents a thread on the Main screen.
-    """
-
-    DEFAULT_CSS = """
-    Thread {
-        height: 3;
-        width: 1fr;
-        layout: grid;
-        grid-size: 3;
-        grid-columns: 14fr 1fr 2fr;
-        content-align: left middle;
-        padding: 1 1;
-    }
-    """
-    class Selected(Message):
-        """Message when a thread is clicked on, so that main app
-        can handle the event by loading thread screen.
-        """
-        def __init__(self, thread_data):
-            self.data = thread_data
-            super().__init__()
-
-    def __init__(self, *args, thread_data=None, **kw) -> None:
-        super().__init__(*args, **kw)
-        self.data = thread_data
-
-    def get(self, attr):
-        return self.data.get(attr)
-
-    def subject(self):
-        return self.get('subject')
-
-    def time_format(self):
-        return datetime.fromisoformat(self.data.get('date_active'))
-
-    def compose(self):
-        yield Static(self.subject())
-        yield Static(":speech_balloon: {}".format(self.data.get("replies_count")))
-        now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
-        thread_date = self.time_format()
-        yield Static(":two-thirty: {}".format(timeago.format(thread_date, now)))
-
-    async def _on_click(self, _: events.Click) -> None:
-        self.post_message(self.Selected(self))
 
 
 def main():
