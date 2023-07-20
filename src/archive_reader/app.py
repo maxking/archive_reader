@@ -12,11 +12,13 @@ from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
 from textual.widgets import (Button, Footer, Input, ListItem, ListView,
-                             LoadingIndicator, Markdown, Placeholder,
-                             SelectionList, Static)
+                             LoadingIndicator, Placeholder, SelectionList,
+                             Static)
 
-from .hyperkitty import Hyperkitty, fetch_urls
+from .hyperkitty import HyperkittyAPI, fetch_urls
+from .storage import cache_get, cache_set
 
+hk = HyperkittyAPI()
 
 def rich_bold(in_string):
     """Add rich markup for bold to the input string."""
@@ -166,6 +168,10 @@ class MailingListChoose(ScrollableContainer):
     """Pick a mailing list from the available ones."""
 
     DEFAULT_CSS = """
+    Screen {
+        align: center middle;
+    }
+
     SelectionList {
         padding: 1;
         border: solid $accent;
@@ -218,18 +224,21 @@ class MailingListAddScreen(Screen):
 
     @work(exclusive=True)
     async def update_mailinglists(self, base_url):
-        self.hk_server = Hyperkitty(base_url=base_url)
-        lists_json = await self.hk_server.lists()
+        lists_json = await hk.lists(base_url)
         selection_list = self.query_one(SelectionList)
-        for _, ml in lists_json.items():
-            selection_list.add_option((f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')))
+        for ml in lists_json.get('results'):
+            cache_set(ml.get('name'), ml)
+            log(ml)
+            selection_list.add_option((
+                f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')
+                ))
 
     async def on_input_submitted(self, message: Input.Submitted):
         self.base_url = message.value
         self.update_mailinglists(self.base_url)
 
     def on_mailing_list_choose_selected(self, message):
-        self.dismiss((message.data, self.hk_server))
+        self.dismiss(message.data)
 
 
 class Thread(ListItem):
@@ -266,7 +275,7 @@ class Thread(ListItem):
         return self.get('subject')
 
     def time_format(self):
-        return datetime.fromisoformat(self.data.get('date_active'))
+        return self.data.get('date_active')
 
     def compose(self):
         yield Static(self.subject())
@@ -311,11 +320,11 @@ class ArchiveApp(App):
         self._hide_loading()
 
     def action_add_mailinglist(self):
-        def get_lists(returns):
-            lists, hk_server, = returns
-            self.hk_server = hk_server
+        def get_lists(lists):
             for ml in lists:
-                self.query_one(MailingLists).append(MailingList(ml))
+                ml_json = cache_get(ml)
+                log(ml, ml_json)
+                self.query_one(MailingLists).append(MailingList(ml_json))
         self.push_screen(MailingListAddScreen(), get_lists)
 
     # def action_focus_email(self, msgid):
@@ -328,16 +337,16 @@ class ArchiveApp(App):
         self.query_one(LoadingIndicator).display = False
 
     @work()
-    async def update_threads(self, ml_name):
+    async def update_threads(self, ml):
         header = self.query_one("#header", Header)
-        header.text = ml_name
+        header.text = ml.name
         self._show_loading()
         threads_container = self.query_one("#threads", ListView)
-        threads = await self.hk_server.threads(ml_name)
+        threads = await hk.threads(ml._data)
         # First, clear the threads.
         threads_container.clear()
         # Then add all the new threads that were found.
-        for thread in threads:
+        for thread in threads.get('results'):
             with suppress(DuplicateIds):
                 threads_container.append(
                     Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
@@ -348,16 +357,12 @@ class ArchiveApp(App):
         # Handle the list item selected for MailingList.
         if isinstance(item.item, MailingList):
             self.current_mailinglist = item.item
-            self.update_threads(item.item.name)
+            self.update_threads(item.item)
         elif isinstance(item.item, Thread):
             self.push_screen(ThreadReadScreen(thread=item.item))
 
 class MailingLists(ListView):
     """Represents the left side with Subscribed MailingLists."""
-
-    def __init__(self, hk_server=None, *args, **kw):
-        super().__init__(*args, **kw)
-        self.hk_server = hk_server
 
 
 class MailingList(ListItem):
@@ -369,15 +374,20 @@ class MailingList(ListItem):
     }
     """
     def __init__(self, data):
+        if data is None:
+            raise ValueError('Empty mailinglist json response')
         self._data = data
         super().__init__()
 
     def render(self):
-        return self._data
+        return self.name
 
     @property
     def name(self):
-        return self._data
+        return self._data.get('name')
+
+    def get(self, key):
+        return self._data.get(key)
 
 
 def main():

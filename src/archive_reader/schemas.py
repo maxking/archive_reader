@@ -60,7 +60,6 @@ class EmailSchema(Schema):
     children = fields.List(fields.Nested(fields.URL))
 
 
-
 class EmailsPage(Schema):
     count = fields.Int()
     next = fields.URL(load_default=None)
