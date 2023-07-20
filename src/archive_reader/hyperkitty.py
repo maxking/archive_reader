@@ -27,10 +27,10 @@ class HyperkittyAPI:
 
     async def threads(self, ml):
         """Given a ML object, return the threads for that Mailinglist."""
-        return self._call(ml.threads, ThreadsPage)
+        return self._call(ml.get('threads'), ThreadsPage)
 
     async def emails(self, thread):
-        return self._call(thread.emails, MailingListPage)
+        return self._call(thread.get('emails'), MailingListPage)
 
 
 class Hyperkitty:
