@@ -16,7 +16,7 @@ from textual.widgets import (Button, Footer, Input, ListItem, ListView,
                              Static)
 
 from .hyperkitty import HyperkittyAPI, fetch_urls
-from .storage import cache_get, cache_set
+from .storage import SUBSCRIBED_ML, cache_get, cache_set
 
 hk = HyperkittyAPI()
 
@@ -228,7 +228,6 @@ class MailingListAddScreen(Screen):
         selection_list = self.query_one(SelectionList)
         for ml in lists_json.get('results'):
             cache_set(ml.get('name'), ml)
-            log(ml)
             selection_list.add_option((
                 f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')
                 ))
@@ -318,17 +317,26 @@ class ArchiveApp(App):
 
     def on_mount(self):
         self._hide_loading()
+        self._load_subscribed_lists()
 
     def action_add_mailinglist(self):
         def get_lists(lists):
+            cache_set(SUBSCRIBED_ML, lists)
             for ml in lists:
-                ml_json = cache_get(ml)
-                log(ml, ml_json)
-                self.query_one(MailingLists).append(MailingList(ml_json))
+                self._add_ml(ml)
         self.push_screen(MailingListAddScreen(), get_lists)
 
-    # def action_focus_email(self, msgid):
-    #     threads_view = self.query_one('#thread-emails', ListView)
+    def _add_ml(self, ml):
+        ml_json = cache_get(ml)
+        log(ml, ml_json)
+        if ml_json:
+            self.query_one(MailingLists).append(MailingList(ml_json))
+
+    def _load_subscribed_lists(self):
+        subscribed = cache_get(SUBSCRIBED_ML)
+        if subscribed:
+            for ml in subscribed:
+                self._add_ml(ml)
 
     def _show_loading(self):
         self.query_one(LoadingIndicator).display = True
