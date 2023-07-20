@@ -11,7 +11,9 @@ def cache_set(key, value):
     with Cache(cache.directory) as reference:
         reference.set(key, value)
 
-def cache_get(key):
+def cache_get(key, default=None):
     value = cache.get(key)
     log(f'Fetched {key} as {value}')
-    return value
+    if value:
+        return value
+    return default

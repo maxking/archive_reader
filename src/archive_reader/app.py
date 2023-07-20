@@ -319,9 +319,16 @@ class ArchiveApp(App):
         self._hide_loading()
         self._load_subscribed_lists()
 
+    def  _store_subscribed_lists(self, lists):
+        stored = cache_get(SUBSCRIBED_ML, [])
+        for each in lists:
+            if each not in stored:
+                stored.append(each)
+        cache_set(SUBSCRIBED_ML, stored)
+
     def action_add_mailinglist(self):
         def get_lists(lists):
-            cache_set(SUBSCRIBED_ML, lists)
+            self._store_subscribed_lists(lists)
             for ml in lists:
                 self._add_ml(ml)
         self.push_screen(MailingListAddScreen(), get_lists)
