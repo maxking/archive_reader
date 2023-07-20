@@ -81,6 +81,10 @@ class Email(ListItem):
         # TODO: Return the sender's address too.
         return f"{self.get('sender_name')}"
 
+    @property
+    def message_id_hash(self):
+        return f"{self.get('message_id_hash')}"
+
     def compose(self):
         yield Static(rich_bold(f'From: {self.sender}'))
         yield Static(rich_bold(f'Date: {self.get("date")}'))
@@ -125,7 +129,13 @@ class ThreadReadScreen(Screen):
         replies, _ = await fetch_urls([self.thread.get('emails')], log)
         reply_urls = [each.get('url') for each in replies[0].get('results')]
         replies, _ = await fetch_urls(reply_urls)
-        reply_emails = [Email(email_contents=reply) for reply in replies]
+        reply_emails = [
+            Email(
+                email_contents=reply,
+                id='message-id-{}'.format(reply.get('message_id_hash'))
+                )
+            for reply in replies
+            ]
         self.add_emails(reply_emails)
         self.add_email_authors(reply_emails)
         self._hide_loading()
@@ -138,7 +148,9 @@ class ThreadReadScreen(Screen):
     def add_email_authors(self, emails):
         view = self.query_one('#thread-authors', ListView)
         for email in emails:
-            view.append(ListItem(Static(email.sender, classes="sender")))
+            view.append(
+                ListItem(
+                    Static(f"{email.sender}", classes="sender")))
 
     def on_mount(self):
         self.load_emails()
@@ -258,6 +270,9 @@ class ArchiveApp(App):
                 self.query_one(MailingLists).append(MailingList(ml))
         self.push_screen(MailingListAddScreen(), get_lists)
 
+    # def action_focus_email(self, msgid):
+    #     threads_view = self.query_one('#thread-emails', ListView)
+
     def _show_loading(self):
         self.query_one(LoadingIndicator).display = True
 
@@ -284,6 +299,7 @@ class ArchiveApp(App):
     async def on_list_view_selected(self, item):
         # Handle the list item selected for MailingList.
         if isinstance(item.item, MailingList):
+            self.current_mailinglist = item.item
             self.update_threads(item.item.name)
         elif isinstance(item.item, Thread):
             self.push_screen(ThreadReadScreen(thread=item.item))
@@ -349,11 +365,14 @@ class Thread(ListItem):
     def subject(self):
         return self.get('subject')
 
+    def time_format(self):
+        return datetime.fromisoformat(self.data.get('date_active'))
+
     def compose(self):
         yield Static(self.subject())
         yield Static(":speech_balloon: {}".format(self.data.get("replies_count")))
         now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
-        thread_date = datetime.fromisoformat(self.data.get('date_active'))
+        thread_date = self.time_format()
         yield Static(":two-thirty: {}".format(timeago.format(thread_date, now)))
 
     async def _on_click(self, _: events.Click) -> None:

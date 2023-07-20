@@ -9,6 +9,30 @@ __all__ = [
     'Hyperkitty',
 ]
 
+
+class HyperkittyAPI:
+
+    async def _call(self, url, schema):
+        async with httpx.AsyncClient() as client:
+            results = (await client.get(url, follow_redirects=True))
+        if results.status_code == 200:
+            # self._lists_json = {item.get("name"): item for item in results.json().get("results")}
+            obj = schema()
+            return obj.load(data=results.json())
+        results.raise_for_status()
+
+    async def lists(self, base_url):
+        url = f"{base_url}/api/lists?format=json"
+        return self._call(url, MailingListPage)
+
+    async def threads(self, ml):
+        """Given a ML object, return the threads for that Mailinglist."""
+        return self._call(ml.threads, ThreadsPage)
+
+    async def emails(self, thread):
+        return self._call(thread.emails, MailingListPage)
+
+
 class Hyperkitty:
     """
     Hyperkitty is a client for Hyperkitty. It returns objects that can be

@@ -10,6 +10,7 @@ dependencies = [
     "httpx",
     "marshmallow",
     "timeago",
+    "diskcache",
 ]
 
 requires-python = ">=3.10"
