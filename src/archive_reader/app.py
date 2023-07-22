@@ -129,9 +129,12 @@ class ThreadReadScreen(Screen):
     @work
     async def load_emails(self):
         # TODO: Don't assume the requests are going to pass always!!!
+        log('Fetching Emails URLs')
         replies, _ = await fetch_urls([self.thread.get('emails')], log)
         reply_urls = [each.get('url') for each in replies[0].get('results')]
+        log(f'Retrieved email urls {reply_urls}')
         replies, _ = await fetch_urls(reply_urls)
+        log(f'Received email contents...')
         reply_emails = [
             Email(
                 email_contents=reply,
@@ -139,8 +142,11 @@ class ThreadReadScreen(Screen):
                 )
             for reply in replies
             ]
-        self.add_emails(reply_emails)
-        self.add_email_authors(reply_emails)
+        try:
+            self.add_emails(reply_emails)
+            self.add_email_authors(reply_emails)
+        except Exception as ex:
+            log(ex)
         self._hide_loading()
 
     def add_emails(self, emails):
@@ -353,18 +359,21 @@ class ArchiveApp(App):
         self.query_one(LoadingIndicator).display = False
 
     def _load_saved_threads(self, ml):
-        """If there are any saved threads for this ML, set those."""
+        """If there are any saved threads for this ML, set those.
+
+        Return total no. of loaded threads.
+        """
         key = f'{ml}_threads'
         existing_threads = cache_get(key, {})
         if not existing_threads:
             # More importantly, if you are not loading threads from
             # local cache then do not unhide the loading screen.
             log('There are no cached threads')
-            return False
+            return 0
         for _, thread in existing_threads.items():
             self._set_thread(thread)
         self._hide_loading()
-        return True
+        return len(existing_threads)
 
     def _set_thread(self, thread):
         try:
@@ -417,6 +426,7 @@ class ArchiveApp(App):
         if not loaded:
             # If the cached threads weren't loaded then hide those.
             self._hide_loading()
+        self.notify('Finished refreshing for new threads.'.format(), title='Thread refresh complete', timeout=3)
 
     async def on_list_view_selected(self, item):
         # Handle the list item selected for MailingList.
@@ -425,6 +435,9 @@ class ArchiveApp(App):
             self.update_threads(item.item)
         elif isinstance(item.item, Thread):
             log(f'Thread {item.item} was selected.')
+            # Make sure that we cancel the workers so that nothing will interfere after
+            # we have moved on to the next screen.
+            self.workers.cancel_all()
             self.push_screen(ThreadReadScreen(thread=item.item))
 
 class MailingLists(ListView):
