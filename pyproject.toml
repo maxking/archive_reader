@@ -24,7 +24,9 @@ build-backend = "pdm.backend"
 [tool.pdm.dev-dependencies]
 dependencies = [
     "textual-dev",
+    "blue"
 ]
 
 [tool.pdm.scripts]
 start = {call = "archive_reader.app:main"}
+format = "pdm run blue src/"
