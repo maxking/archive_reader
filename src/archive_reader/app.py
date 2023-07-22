@@ -444,8 +444,6 @@ class ArchiveApp(App):
         self.notify(f'Saved Cached threads for {ml.name}', title='Saved')
 
     async def _load_new_threads(self, threads):
-        # TODO: Sort the threads.
-        # threads.update(self._existing_threads)
         self._existing_threads.update(threads)
         # Sort the threads so that new ones are on top.
         self._existing_threads = dict(
