@@ -6,11 +6,13 @@ SUBSCRIBED_ML = 'mailinglists'
 
 cache = Cache('.store/')
 
+
 def cache_set(key, value):
     cache.close()
     with Cache(cache.directory) as reference:
         log(f'Setting {key}')
         reference.set(key, value)
+
 
 def cache_get(key, default=None):
     log(f'Getting {key}')

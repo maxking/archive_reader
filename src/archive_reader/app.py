@@ -12,18 +12,28 @@ from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
-from textual.widgets import (Button, Footer, Input, ListItem, ListView,
-                             LoadingIndicator, Placeholder, SelectionList,
-                             Static)
+from textual.widgets import (
+    Button,
+    Footer,
+    Input,
+    ListItem,
+    ListView,
+    LoadingIndicator,
+    Placeholder,
+    SelectionList,
+    Static,
+)
 
 from .hyperkitty import HyperkittyAPI, fetch_urls
 from .storage import SUBSCRIBED_ML, cache_get, cache_set
 
 hk = HyperkittyAPI()
 
+
 def rich_bold(in_string):
     """Add rich markup for bold to the input string."""
     return f'[bold]{in_string}[/bold]'
+
 
 class Header(Placeholder):
     """A generic header class with configurable text.
@@ -32,6 +42,7 @@ class Header(Placeholder):
     and `text` attribute is a reactive element so it is updated without
     any refresh or update operation.
     """
+
     DEFAULT_CSS = """
     Header {
         height: 3;
@@ -39,10 +50,11 @@ class Header(Placeholder):
     }
     """
 
-    text = reactive("Archive Reader")
+    text = reactive('Archive Reader')
 
     def render(self) -> RenderableType:
         return self.text
+
 
 class Email(ListItem):
     """Email class represents rendering of a single Email.
@@ -100,7 +112,8 @@ class ThreadReadScreen(Screen):
 
     This is composed of multiple Emails, which are embedded inside a listview.
     """
-    BINDINGS = [("escape", "app.pop_screen", "Close thread")]
+
+    BINDINGS = [('escape', 'app.pop_screen', 'Close thread')]
     DEFAULT_CSS = """
     .main {
         layout: grid;
@@ -121,9 +134,9 @@ class ThreadReadScreen(Screen):
         header.text = self.thread.subject()
         yield header
         yield LoadingIndicator()
-        with Horizontal(classes="main"):
-            yield ListView(id="thread-emails")
-            yield ListView(id="thread-authors")
+        with Horizontal(classes='main'):
+            yield ListView(id='thread-emails')
+            yield ListView(id='thread-authors')
         yield Footer()
 
     @work
@@ -138,10 +151,10 @@ class ThreadReadScreen(Screen):
         reply_emails = [
             Email(
                 email_contents=reply,
-                id='message-id-{}'.format(reply.get('message_id_hash'))
-                )
+                id='message-id-{}'.format(reply.get('message_id_hash')),
+            )
             for reply in replies
-            ]
+        ]
         try:
             self.add_emails(reply_emails)
             self.add_email_authors(reply_emails)
@@ -157,9 +170,7 @@ class ThreadReadScreen(Screen):
     def add_email_authors(self, emails):
         view = self.query_one('#thread-authors', ListView)
         for email in emails:
-            view.append(
-                ListItem(
-                    Static(f"{email.sender}", classes="sender")))
+            view.append(ListItem(Static(f'{email.sender}', classes='sender')))
 
     def on_mount(self):
         self.load_emails()
@@ -191,20 +202,27 @@ class MailingListChoose(ScrollableContainer):
         """Message when a thread is clicked on, so that main app
         can handle the event by loading thread screen.
         """
+
         def __init__(self, lists):
             self.data = lists
             super().__init__()
 
     def on_mount(self) -> None:
-        self.query_one(SelectionList).border_title = "Select Mailing lists to subscribe to"
+        self.query_one(
+            SelectionList
+        ).border_title = 'Select Mailing lists to subscribe to'
 
     def compose(self):
         yield SelectionList()
-        yield Button("Subscribe Selected", variant="primary", id="select_mailinglist")
+        yield Button(
+            'Subscribe Selected', variant='primary', id='select_mailinglist'
+        )
 
     def on_button_pressed(self, event: Button.Pressed):
-        if event.button.id == "select_mailinglist":
-            self.post_message(self.Selected(self.query_one(SelectionList).selected))
+        if event.button.id == 'select_mailinglist':
+            self.post_message(
+                self.Selected(self.query_one(SelectionList).selected)
+            )
             event.stop()
 
 
@@ -220,13 +238,13 @@ class MailingListAddScreen(Screen):
         align: center middle;
     }
     """
-    BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
+    BINDINGS = [('escape', 'app.pop_screen', 'Pop screen')]
 
     def compose(self):
-        yield Static("Hyperkitty Server URL", classes="label")
-        yield Input(placeholder="https://")
+        yield Static('Hyperkitty Server URL', classes='label')
+        yield Input(placeholder='https://')
         yield Static()
-        yield MailingListChoose(id="pick-mailinglist")
+        yield MailingListChoose(id='pick-mailinglist')
         yield Footer()
 
     @work(exclusive=True)
@@ -235,9 +253,12 @@ class MailingListAddScreen(Screen):
         selection_list = self.query_one(SelectionList)
         for ml in lists_json.get('results'):
             cache_set(ml.get('name'), ml)
-            selection_list.add_option((
-                f"{ml.get('display_name')} <\"{ml.get('name')}\">", ml.get('name')
-                ))
+            selection_list.add_option(
+                (
+                    f"{ml.get('display_name')} <\"{ml.get('name')}\">",
+                    ml.get('name'),
+                )
+            )
 
     async def on_input_submitted(self, message: Input.Submitted):
         self.base_url = message.value
@@ -248,8 +269,7 @@ class MailingListAddScreen(Screen):
 
 
 class Thread(ListItem):
-    """Represents a thread on the Main screen.
-    """
+    """Represents a thread on the Main screen."""
 
     DEFAULT_CSS = """
     Thread {
@@ -263,10 +283,12 @@ class Thread(ListItem):
     }
     """
     read = reactive(False, layout=True)
+
     class Selected(Message):
         """Message when a thread is clicked on, so that main app
         can handle the event by loading thread screen.
         """
+
         def __init__(self, thread_data):
             self.data = thread_data
             super().__init__()
@@ -290,10 +312,14 @@ class Thread(ListItem):
     def compose(self):
         yield Static(f':envelope:')
         yield Static(self.subject())
-        yield Static(":speech_balloon: {}".format(self.data.get("replies_count")))
+        yield Static(
+            ':speech_balloon: {}'.format(self.data.get('replies_count'))
+        )
         now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
         thread_date = self.time_format()
-        yield Static(":two-thirty: {}".format(timeago.format(thread_date, now)))
+        yield Static(
+            ':two-thirty: {}'.format(timeago.format(thread_date, now))
+        )
 
     async def _on_click(self, _: events.Click) -> None:
         self.post_message(self.Selected(self))
@@ -302,36 +328,35 @@ class Thread(ListItem):
 class ArchiveApp(App):
     """Textual reader app to read Hyperkitty (GNU Mailman's official Archiver) email archives."""
 
-    CSS_PATH = "archiver.css"
+    CSS_PATH = 'archiver.css'
     BINDINGS = [
-        ("a", "add_mailinglist", "Add MailingList"),
-        ("d", "app.toggle_dark", "Toggle Dark mode"),
-        ("s", "app.screenshot()", "Screenshot"),
-        ("q", "quit", "Quit"),
+        ('a', 'add_mailinglist', 'Add MailingList'),
+        ('d', 'app.toggle_dark', 'Toggle Dark mode'),
+        ('s', 'app.screenshot()', 'Screenshot'),
+        ('q', 'quit', 'Quit'),
     ]
-    TITLE = "Archive Reader"
-    SUB_TITLE = "An app to reach Hyperkitty archives in Terminal!"
+    TITLE = 'Archive Reader'
+    SUB_TITLE = 'An app to reach Hyperkitty archives in Terminal!'
     SCREENS = {'threadview': ThreadReadScreen}
     show_tree = var(True)
 
-
     def watch_show_tree(self, show_tree: bool) -> None:
         """Called when show_tree is modified."""
-        self.set_class(show_tree, "-show-tree")
+        self.set_class(show_tree, '-show-tree')
 
     def compose(self) -> ComposeResult:
         """Compose our UI."""
-        yield Header(id="header")
-        yield Vertical(MailingLists(id="lists"), id="lists-view")
+        yield Header(id='header')
+        yield Vertical(MailingLists(id='lists'), id='lists-view')
         yield LoadingIndicator()
-        yield ListView(id="threads")
+        yield ListView(id='threads')
         yield Footer()
 
     def on_mount(self):
         self._hide_loading()
         self._load_subscribed_lists()
 
-    def  _store_subscribed_lists(self, lists):
+    def _store_subscribed_lists(self, lists):
         stored = cache_get(SUBSCRIBED_ML, [])
         for each in lists:
             if each not in stored:
@@ -343,6 +368,7 @@ class ArchiveApp(App):
             self._store_subscribed_lists(lists)
             for ml in lists:
                 self._add_ml(ml)
+
         self.push_screen(MailingListAddScreen(), get_lists)
 
     def _add_ml(self, ml):
@@ -389,14 +415,16 @@ class ArchiveApp(App):
 
     async def _set_thread(self, thread):
         try:
-            threads_container = self.query_one("#threads", ListView)
+            threads_container = self.query_one('#threads', ListView)
         except NoMatches:
             # This can potentially happen when we have switched to a different
             # screen and we aren't able to find the `threads` in the current DOM.
             log(f'Failed to find threads_container when setting {thread}')
             return
         with suppress(DuplicateIds):
-            widget = Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
+            widget = Thread(
+                id=f"thread-{thread.get('thread_id')}", thread_data=thread
+            )
             if widget not in threads_container.children:
                 await threads_container.append(widget)
 
@@ -407,7 +435,9 @@ class ArchiveApp(App):
         if not cached_threads:
             log('Saving new found threads since there are no existing.')
             cache_set(key, self._existing_threads)
-        log(f'Merging old and new threads. {len(cached_threads)} cached threads.')
+        log(
+            f'Merging old and new threads. {len(cached_threads)} cached threads.'
+        )
         cached_threads.update(self._existing_threads)
         log(f'Saving merged threads. {len(cached_threads)} threads.')
         cache_set(key, cached_threads)
@@ -418,12 +448,18 @@ class ArchiveApp(App):
         # threads.update(self._existing_threads)
         self._existing_threads.update(threads)
         # Sort the threads so that new ones are on top.
-        self._existing_threads = dict(sorted(self._existing_threads.items(), key=lambda item: item[1]['date_active'], reverse=True))
+        self._existing_threads = dict(
+            sorted(
+                self._existing_threads.items(),
+                key=lambda item: item[1]['date_active'],
+                reverse=True,
+            )
+        )
         await self._clear_threads()
         await self._refresh_threads_view()
 
     async def _clear_threads(self):
-        threads_container = self.query_one("#threads", ListView)
+        threads_container = self.query_one('#threads', ListView)
         # First, clear the threads.
         clear_resp = threads_container.clear()
         log(type(clear_resp))
@@ -433,7 +469,7 @@ class ArchiveApp(App):
 
     @work()
     async def update_threads(self, ml):
-        header = self.query_one("#header", Header)
+        header = self.query_one('#header', Header)
         header.text = ml.name
         await self._clear_threads()
         self._show_loading()
@@ -450,9 +486,11 @@ class ArchiveApp(App):
         if not loaded:
             # If the cached threads weren't loaded then hide those.
             self._hide_loading()
-        self.notify(f'Finished refreshing new threads for {self.current_mailinglist.name}.',
-                    title='Thread refresh complete',
-                    timeout=3)
+        self.notify(
+            f'Finished refreshing new threads for {self.current_mailinglist.name}.',
+            title='Thread refresh complete',
+            timeout=3,
+        )
 
     async def on_list_view_selected(self, item):
         # Handle the list item selected for MailingList.
@@ -470,6 +508,7 @@ class ArchiveApp(App):
             self.push_screen(ThreadReadScreen(thread=item.item))
             item.item.mark_read()
 
+
 class MailingLists(ListView):
     """Represents the left side with Subscribed MailingLists."""
 
@@ -482,6 +521,7 @@ class MailingList(ListItem):
         padding: 1 1;
     }
     """
+
     def __init__(self, data):
         if data is None:
             raise ValueError('Empty mailinglist json response')

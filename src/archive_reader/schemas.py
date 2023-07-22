@@ -46,6 +46,7 @@ class SenderSchema(Schema):
     mailman_id = fields.Str()
     emails = fields.URL()
 
+
 class EmailSchema(Schema):
     url = fields.URL()
     mailinglist = fields.URL()
