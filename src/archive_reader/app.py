@@ -276,13 +276,13 @@ class Thread(ListItem):
         height: 3;
         width: 1fr;
         layout: grid;
-        grid-size: 4;
-        grid-columns: 1fr 14fr 1fr 2fr;
+        grid-size: 3;
+        grid-columns: 14fr 1fr 2fr;
         content-align: left middle;
         padding: 1 1;
     }
     """
-    read = reactive(False, layout=True)
+    read = reactive(False)
 
     class Selected(Message):
         """Message when a thread is clicked on, so that main app
@@ -306,11 +306,11 @@ class Thread(ListItem):
     def time_format(self):
         return self.data.get('date_active')
 
-    def mark_read(self):
-        self.read = True
+    def watch_read(self, old, new):
+        if old is False and new is True:
+            self.styles.background = 'gray'
 
     def compose(self):
-        yield Static(f':envelope:')
         yield Static(self.subject())
         yield Static(
             ':speech_balloon: {}'.format(self.data.get('replies_count'))
@@ -498,13 +498,14 @@ class ArchiveApp(App):
             # to await the below.
             self.update_threads(item.item)
         elif isinstance(item.item, Thread):
+            item.item.read = True
             log(f'Thread {item.item} was selected.')
             # Make sure that we cancel the workers so that nothing will interfere after
             # we have moved on to the next screen.
             self.workers.cancel_all()
             # Mark the threads as read.
             self.push_screen(ThreadReadScreen(thread=item.item))
-            item.item.mark_read()
+
 
 
 class MailingLists(ListView):
