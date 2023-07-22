@@ -358,7 +358,7 @@ class ArchiveApp(App):
     def _hide_loading(self):
         self.query_one(LoadingIndicator).display = False
 
-    def _load_saved_threads(self, ml):
+    async def _load_saved_threads(self, ml):
         """If there are any saved threads for this ML, set those.
 
         Return total no. of loaded threads.
@@ -370,68 +370,89 @@ class ArchiveApp(App):
             # local cache then do not unhide the loading screen.
             log('There are no cached threads')
             return 0
-        for _, thread in existing_threads.items():
-            self._set_thread(thread)
+        self._existing_threads = existing_threads
+        await self._refresh_threads_view()
         self._hide_loading()
         return len(existing_threads)
 
-    def _set_thread(self, thread):
+    async def _refresh_threads_view(self):
+        """Update the Threads view with the threads that are defined in
+        self._existing_threads.
+        """
+        for _, thread in self._existing_threads.items():
+            await self._set_thread(thread)
+
+    async def _set_thread(self, thread):
         try:
             threads_container = self.query_one("#threads", ListView)
         except NoMatches:
             # This can potentially happen when we have switched to a different
             # screen and we aren't able to find the `threads` in the current DOM.
+            log(f'Failed to find threads_container when setting {thread}')
             return
         with suppress(DuplicateIds):
             widget = Thread(id=f"thread-{thread.get('thread_id')}", thread_data=thread)
             if widget not in threads_container.children:
-                threads_container.append(widget)
+                await threads_container.append(widget)
 
-    def _save_threads(self, ml, threads):
-        key = f'{ml}_threads'
-        existing_threads = cache_get(key, {})
-        if not existing_threads:
+    def _save_threads(self):
+        ml = self.current_mailinglist
+        key = f'{ml.name}_threads'
+        cached_threads = cache_get(key, {})
+        if not cached_threads:
             log('Saving new found threads since there are no existing.')
-            cache_set(key, threads)
-        log(f'Merging old and new threads. {len(existing_threads)} threads.')
-        for thread_id, thread in threads.items():
-            if thread_id not in existing_threads:
-                existing_threads[thread_id] = thread
-        log(f'Saving merged threads. {len(existing_threads)} threads.')
-        cache_set(key, existing_threads)
+            cache_set(key, self._existing_threads)
+        log(f'Merging old and new threads. {len(cached_threads)} cached threads.')
+        cached_threads.update(self._existing_threads)
+        log(f'Saving merged threads. {len(cached_threads)} threads.')
+        cache_set(key, cached_threads)
+        self.notify(f'Saved Cached threads for {ml.name}', title='Saved')
+
+    async def _load_new_threads(self, threads):
+        # TODO: Sort the threads.
+        # threads.update(self._existing_threads)
+        self._existing_threads.update(threads)
+        await self._clear_threads()
+        await self._refresh_threads_view()
+
+    async def _clear_threads(self):
+        threads_container = self.query_one("#threads", ListView)
+        # First, clear the threads.
+        clear_resp = threads_container.clear()
+        log(type(clear_resp))
+        # .clear() returns an awaitable and gives the control back to
+        # DOM to perform the action.
+        await clear_resp
 
     @work()
     async def update_threads(self, ml):
         header = self.query_one("#header", Header)
         header.text = ml.name
-        threads_container = self.query_one("#threads", ListView)
-        # First, clear the threads.
-        threads_container.clear()
+        await self._clear_threads()
         self._show_loading()
         # loaded = was some new cached threads loaded.
-        loaded = self._load_saved_threads(ml.name)
+        loaded = await self._load_saved_threads(ml.name)
         threads = await hk.threads(ml._data)
         # Then add all the new threads that were found.
         list_threads = {}
         for thread in threads.get('results'):
             list_threads[thread.get('thread_id')] = thread
-            try:
-                self._set_thread(thread)
-            except Exception:
-                # Exception raised here is usually due to having switched to
-                # a different screen and then trying to load the thread into
-                # a widget that is no longer in  view.
-                pass
-        self._save_threads(ml.name, list_threads)
+        # Set the new threads in the view.
+        await self._load_new_threads(list_threads)
+        self._save_threads()
         if not loaded:
             # If the cached threads weren't loaded then hide those.
             self._hide_loading()
-        self.notify('Finished refreshing for new threads.'.format(), title='Thread refresh complete', timeout=3)
+        self.notify(f'Finished refreshing new threads for {self.current_mailinglist.name}.',
+                    title='Thread refresh complete',
+                    timeout=3)
 
     async def on_list_view_selected(self, item):
         # Handle the list item selected for MailingList.
         if isinstance(item.item, MailingList):
             self.current_mailinglist = item.item
+            # Since update_threads runs in a worker, we don't need
+            # to await the below.
             self.update_threads(item.item)
         elif isinstance(item.item, Thread):
             log(f'Thread {item.item} was selected.')
