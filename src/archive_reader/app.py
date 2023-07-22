@@ -256,12 +256,13 @@ class Thread(ListItem):
         height: 3;
         width: 1fr;
         layout: grid;
-        grid-size: 3;
-        grid-columns: 14fr 1fr 2fr;
+        grid-size: 4;
+        grid-columns: 1fr 14fr 1fr 2fr;
         content-align: left middle;
         padding: 1 1;
     }
     """
+    read = reactive(False, layout=True)
     class Selected(Message):
         """Message when a thread is clicked on, so that main app
         can handle the event by loading thread screen.
@@ -283,7 +284,11 @@ class Thread(ListItem):
     def time_format(self):
         return self.data.get('date_active')
 
+    def mark_read(self):
+        self.read = True
+
     def compose(self):
+        yield Static(f':envelope:')
         yield Static(self.subject())
         yield Static(":speech_balloon: {}".format(self.data.get("replies_count")))
         now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
@@ -412,6 +417,8 @@ class ArchiveApp(App):
         # TODO: Sort the threads.
         # threads.update(self._existing_threads)
         self._existing_threads.update(threads)
+        # Sort the threads so that new ones are on top.
+        self._existing_threads = dict(sorted(self._existing_threads.items(), key=lambda item: item[1]['date_active'], reverse=True))
         await self._clear_threads()
         await self._refresh_threads_view()
 
@@ -459,7 +466,9 @@ class ArchiveApp(App):
             # Make sure that we cancel the workers so that nothing will interfere after
             # we have moved on to the next screen.
             self.workers.cancel_all()
+            # Mark the threads as read.
             self.push_screen(ThreadReadScreen(thread=item.item))
+            item.item.mark_read()
 
 class MailingLists(ListView):
     """Represents the left side with Subscribed MailingLists."""
