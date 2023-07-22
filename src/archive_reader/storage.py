@@ -2,6 +2,8 @@
 from diskcache import Cache
 from textual import log
 
+#: This is the key used to store the subscribed MailingLists in the
+#: the local cache.
 SUBSCRIBED_ML = 'mailinglists'
 
 cache = Cache('.store/')

@@ -147,7 +147,7 @@ class ThreadReadScreen(Screen):
         reply_urls = [each.get('url') for each in replies[0].get('results')]
         log(f'Retrieved email urls {reply_urls}')
         replies, _ = await fetch_urls(reply_urls)
-        log(f'Received email contents...')
+        log('Received email contents...')
         reply_emails = [
             Email(
                 email_contents=reply,

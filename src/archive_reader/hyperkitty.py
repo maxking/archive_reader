@@ -6,7 +6,7 @@ from .schemas import EmailsPage, MailingListPage, ThreadsPage
 
 __all__ = [
     'fetch_urls',
-    'Hyperkitty',
+    'HyperkittyAPI',
 ]
 
 
