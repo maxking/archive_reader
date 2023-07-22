@@ -507,7 +507,6 @@ class ArchiveApp(App):
             self.push_screen(ThreadReadScreen(thread=item.item))
 
 
-
 class MailingLists(ListView):
     """Represents the left side with Subscribed MailingLists."""
 
