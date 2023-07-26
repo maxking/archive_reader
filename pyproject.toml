@@ -29,6 +29,8 @@ dependencies = [
 ]
 
 [tool.pdm.scripts]
-start = {call = "archive_reader.app:main"}
 format = "pdm run blue src/"
 flake8 = "pdm run flake8 src/"
+
+[project.scripts]
+areader = "archive_reader.app:main"
