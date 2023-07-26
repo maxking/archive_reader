@@ -1,4 +1,5 @@
 from contextlib import suppress
+from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -23,11 +24,13 @@ from textual.widgets import (
     SelectionList,
     Static,
 )
-
+from textual.widget import Widget
 from .hyperkitty import HyperkittyAPI, fetch_urls
 from .storage import SUBSCRIBED_ML, cache_get, cache_set
 
 hk = HyperkittyAPI()
+
+DEFAULT_NOTIFY_TIMEOUT = 2
 
 
 def rich_bold(in_string):
@@ -268,6 +271,20 @@ class MailingListAddScreen(Screen):
         self.dismiss(message.data)
 
 
+class ThreadReplies(Widget):
+
+    has_new = reactive(0)
+    count = reactive(0)
+
+    def __init__(self, count, has_new, *args, **kw):
+        super().__init__(*args, **kw)
+        self.count = count
+        self.has_new = has_new
+
+    def render(self):
+        return f':speech_balloon: {self.count} ({self.has_new})'
+
+
 class Thread(ListItem):
     """Represents a thread on the Main screen."""
 
@@ -282,7 +299,17 @@ class Thread(ListItem):
         padding: 1 1;
     }
     """
+    #: Represents whether this thread has been opened in the current
+    #: reader before. This is computed locally and turned to 'read'
+    #: as soon as the thread is opened.
     read = reactive(False)
+    #: Represents whether an existing thread has new emails after the
+    #: refresh operation is complete.
+    has_new = reactive(0)
+    #: If a thread is entirely new, i.e. not loaded from the local
+    #: cache, then this is turned on. This implies that this was
+    #: just fetched from the remote server.
+    is_new = reactive(False)
 
     class Selected(Message):
         """Message when a thread is clicked on, so that main app
@@ -291,10 +318,21 @@ class Thread(ListItem):
 
         def __init__(self, thread_data):
             self.data = thread_data
+
             super().__init__()
 
-    def __init__(self, *args, thread_data=None, **kw) -> None:
+    class Updated(Message):
+        def __init__(self, thread_data):
+            self.data = thread_data
+            super().__init__()
+
+    def __init__(
+        self, *args, thread_data=None, mailinglist=None, **kw
+    ) -> None:
         super().__init__(*args, **kw)
+        self.mailinglist = mailinglist
+        self.is_new = thread_data.get('is_new', False)
+        self.has_new = thread_data.get('has_new', 0)
         self.data = thread_data
 
     def get(self, attr):
@@ -309,11 +347,37 @@ class Thread(ListItem):
     def watch_read(self, old, new):
         if old is False and new is True:
             self.styles.background = 'gray'
+            # Regardless of the current value, just turn these two off since
+            # they are not required anymore.
+            self.is_new = False
+            self.has_new = 0
+            self.data['is_new'] = False
+            self.data['has_new'] = 0
+            log(f'Sending ThreadUpdated for {self}')
+            self.post_message(self.Updated(self.data))
+        self._save_read_status(new)
+
+    def _save_read_status(self, new):
+        # Update the thread.read() status in the storage.
+        # XXX(abraj): This is a relatively complex operation. The reason
+        # for which is the fact that we are using a caching solution as a
+        # trivial json database in a way that doesn't provide tons of data
+        # access patterns that we want to have.
+        # This can be solved easily with a local Sqlite database in future,
+        # infact, the current caching solution utilizes sqlite underneath.
+        pass
+
+    def watch_has_new(self, _, new):
+        # It is possible that this is b
+        try:
+            self.query_one(ThreadReplies).has_new = new
+        except Exception:
+            log(f'Failed to Find & Update thread replies')
 
     def compose(self):
         yield Static(self.subject())
-        yield Static(
-            ':speech_balloon: {}'.format(self.data.get('replies_count'))
+        yield ThreadReplies(
+            count=self.data.get('replies_count'), has_new=self.has_new
         )
         now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
         thread_date = self.time_format()
@@ -334,11 +398,16 @@ class ArchiveApp(App):
         ('d', 'app.toggle_dark', 'Toggle Dark mode'),
         ('s', 'app.screenshot()', 'Screenshot'),
         ('q', 'quit', 'Quit'),
+        ('u', 'update_threads', 'Update threads'),
     ]
     TITLE = 'Archive Reader'
     SUB_TITLE = 'An app to reach Hyperkitty archives in Terminal!'
     SCREENS = {'threadview': ThreadReadScreen}
     show_tree = var(True)
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self._existing_threads = defaultdict(dict)
 
     def watch_show_tree(self, show_tree: bool) -> None:
         """Called when show_tree is modified."""
@@ -396,12 +465,15 @@ class ArchiveApp(App):
         """
         key = f'{ml}_threads'
         existing_threads = cache_get(key, {})
+        self.notify(
+            f'Loaded {len(existing_threads)} threads for {ml} from cache.'
+        )
         if not existing_threads:
             # More importantly, if you are not loading threads from
             # local cache then do not unhide the loading screen.
             log('There are no cached threads')
             return 0
-        self._existing_threads = existing_threads
+        self._existing_threads['ml'] = existing_threads
         await self._refresh_threads_view()
         self._hide_loading()
         return len(existing_threads)
@@ -410,8 +482,11 @@ class ArchiveApp(App):
         """Update the Threads view with the threads that are defined in
         self._existing_threads.
         """
-        for _, thread in self._existing_threads.items():
+        for _, thread in self._existing_threads.get(
+            self.current_mailinglist.name, {}
+        ).items():
             await self._set_thread(thread)
+        self.notify('Finished displaying loaded threads.')
 
     async def _set_thread(self, thread):
         try:
@@ -423,7 +498,9 @@ class ArchiveApp(App):
             return
         with suppress(DuplicateIds):
             widget = Thread(
-                id=f"thread-{thread.get('thread_id')}", thread_data=thread
+                id=f"thread-{thread.get('thread_id')}",
+                thread_data=thread,
+                mailinglist=self.current_mailinglist,
             )
             if widget not in threads_container.children:
                 await threads_container.append(widget)
@@ -434,7 +511,7 @@ class ArchiveApp(App):
         cached_threads = cache_get(key, {})
         if not cached_threads:
             log('Saving new found threads since there are no existing.')
-            cache_set(key, self._existing_threads)
+            cache_set(key, self._existing_threads[ml.name])
         log(
             f'Merging old and new threads. {len(cached_threads)} cached threads.'
         )
@@ -444,15 +521,44 @@ class ArchiveApp(App):
         self.notify(f'Saved Cached threads for {ml.name}', title='Saved')
 
     async def _load_new_threads(self, threads):
-        self._existing_threads.update(threads)
+        current_ml_threads = self._existing_threads[
+            self.current_mailinglist.name
+        ]
+        for thread_id, thread in threads.items():
+            if thread_id not in current_ml_threads:
+                thread['is_new'] = True
+                current_ml_threads[thread_id] = thread
+            elif (
+                thread['replies_count']
+                > current_ml_threads[thread_id]['replies_count']
+            ):
+                # This thread exists already in the cache.
+                # Check if there are any new replies in this
+                # thread.
+                log(thread)
+                current_ml_threads[thread_id]['has_new'] = (
+                    thread['replies_count']
+                    - current_ml_threads[thread_id]['replies_count']
+                )
+                current_ml_threads[thread_id]['replies_count'] = thread[
+                    'replies_count'
+                ]
+            else:
+                # Thread exists in cache and there aren't any new replies in it.
+                # We will simply skip the thread in this case.
+                pass
+
         # Sort the threads so that new ones are on top.
-        self._existing_threads = dict(
+        current_ml_threads = dict(
             sorted(
-                self._existing_threads.items(),
+                current_ml_threads.items(),
                 key=lambda item: item[1]['date_active'],
                 reverse=True,
             )
         )
+        self._existing_threads[
+            self.current_mailinglist.name
+        ] = current_ml_threads
         await self._clear_threads()
         await self._refresh_threads_view()
 
@@ -464,6 +570,22 @@ class ArchiveApp(App):
         # .clear() returns an awaitable and gives the control back to
         # DOM to perform the action.
         await clear_resp
+
+    async def action_update_threads(self):
+        self.notify(
+            f'Updating threads for {self.current_mailinglist.name}',
+            title='Update starting',
+            timeout=DEFAULT_NOTIFY_TIMEOUT,
+        )
+        self.update_threads(self.current_mailinglist)
+        self._notify_update_complete()
+
+    def _notify_update_complete(self):
+        self.notify(
+            f'Finished refreshing new threads for {self.current_mailinglist.name}.',
+            title='Thread refresh complete',
+            timeout=DEFAULT_NOTIFY_TIMEOUT,
+        )
 
     @work()
     async def update_threads(self, ml):
@@ -484,11 +606,7 @@ class ArchiveApp(App):
         if not loaded:
             # If the cached threads weren't loaded then hide those.
             self._hide_loading()
-        self.notify(
-            f'Finished refreshing new threads for {self.current_mailinglist.name}.',
-            title='Thread refresh complete',
-            timeout=3,
-        )
+        self._notify_update_complete()
 
     async def on_list_view_selected(self, item):
         # Handle the list item selected for MailingList.
@@ -505,6 +623,11 @@ class ArchiveApp(App):
             self.workers.cancel_all()
             # Mark the threads as read.
             self.push_screen(ThreadReadScreen(thread=item.item))
+
+    async def on_thread_updated(self, item):
+        self._existing_threads[self.current_mailinglist.name][
+            item.data['thread_id']
+        ] = item.data
 
 
 class MailingLists(ListView):
