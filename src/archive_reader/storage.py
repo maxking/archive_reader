@@ -10,10 +10,10 @@ cache = Cache('.store/')
 
 
 def cache_set(key, value):
-    cache.close()
     with Cache(cache.directory) as reference:
+        reference.pop(key)
         log(f'Setting {key}')
-        reference.set(key, value)
+        return reference.set(key, value, retry=True)
 
 
 def cache_get(key, default=None):

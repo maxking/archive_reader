@@ -298,6 +298,10 @@ class Thread(ListItem):
         content-align: left middle;
         padding: 1 1;
     }
+
+    .read {
+        background: gray;
+    }
     """
     #: Represents whether this thread has been opened in the current
     #: reader before. This is computed locally and turned to 'read'
@@ -333,7 +337,10 @@ class Thread(ListItem):
         self.mailinglist = mailinglist
         self.is_new = thread_data.get('is_new', False)
         self.has_new = thread_data.get('has_new', 0)
+        self.read = thread_data.get('read', False)
         self.data = thread_data
+        if self.read:
+            self.add_class('read')
 
     def get(self, attr):
         return self.data.get(attr)
@@ -346,16 +353,21 @@ class Thread(ListItem):
 
     def watch_read(self, old, new):
         if old is False and new is True:
-            self.styles.background = 'gray'
+            self.add_class('read')
             # Regardless of the current value, just turn these two off since
             # they are not required anymore.
             self.is_new = False
             self.has_new = 0
             self.data['is_new'] = False
             self.data['has_new'] = 0
+            self.data['read'] = True
+            self.read = True
             log(f'Sending ThreadUpdated for {self}')
-            self.post_message(self.Updated(self.data))
+            self._notify_updated()
         self._save_read_status(new)
+
+    def _notify_updated(self):
+        self.post_message(self.Updated(self.data))
 
     def _save_read_status(self, new):
         # Update the thread.read() status in the storage.
@@ -485,8 +497,8 @@ class ArchiveApp(App):
         for _, thread in self._existing_threads.get(
             self.current_mailinglist.name, {}
         ).items():
+            log(f'{thread=}')
             await self._set_thread(thread)
-        self.notify('Finished displaying loaded threads.')
 
     async def _set_thread(self, thread):
         try:
@@ -508,40 +520,43 @@ class ArchiveApp(App):
     def _save_threads(self):
         ml = self.current_mailinglist
         key = f'{ml.name}_threads'
-        cached_threads = cache_get(key, {})
-        if not cached_threads:
-            log('Saving new found threads since there are no existing.')
-            cache_set(key, self._existing_threads[ml.name])
-        log(
-            f'Merging old and new threads. {len(cached_threads)} cached threads.'
-        )
-        cached_threads.update(self._existing_threads)
-        log(f'Saving merged threads. {len(cached_threads)} threads.')
-        cache_set(key, cached_threads)
-        self.notify(f'Saved Cached threads for {ml.name}', title='Saved')
+        log(f'Saving threads for {ml.name}')
+        saved = cache_set(key, self._existing_threads[ml.name])
+        log(f'Saved threads for {ml.name}: {saved}')
 
     async def _load_new_threads(self, threads):
+        # Fetch all the threads loaded form the cache.
         current_ml_threads = self._existing_threads[
             self.current_mailinglist.name
         ]
         for thread_id, thread in threads.items():
+            # If this thread is not in the cache,
+            # Set the `is_new` flag on it and also
+            # read = False.
             if thread_id not in current_ml_threads:
                 thread['is_new'] = True
+                thread['read'] = False
+                # All the replies are unread.
+                thread['has_new'] = thread['replies_count']
                 current_ml_threads[thread_id] = thread
             elif (
                 thread['replies_count']
                 > current_ml_threads[thread_id]['replies_count']
             ):
-                # This thread exists already in the cache.
-                # Check if there are any new replies in this
-                # thread.
-                log(thread)
+                # This thread exists already in the cache and
+                # there are any new replies in this thread set
+                # the total no. of new replies.
                 current_ml_threads[thread_id]['has_new'] = (
                     thread['replies_count']
                     - current_ml_threads[thread_id]['replies_count']
                 )
+                # Also, update the replies_count & date_active field, which
+                # are the only two fields which can change.
                 current_ml_threads[thread_id]['replies_count'] = thread[
                     'replies_count'
+                ]
+                current_ml_threads[thread_id]['date_active'] = thread[
+                    'date_active'
                 ]
             else:
                 # Thread exists in cache and there aren't any new replies in it.
@@ -559,8 +574,6 @@ class ArchiveApp(App):
         self._existing_threads[
             self.current_mailinglist.name
         ] = current_ml_threads
-        await self._clear_threads()
-        await self._refresh_threads_view()
 
     async def _clear_threads(self):
         threads_container = self.query_one('#threads', ListView)
@@ -602,6 +615,8 @@ class ArchiveApp(App):
             list_threads[thread.get('thread_id')] = thread
         # Set the new threads in the view.
         await self._load_new_threads(list_threads)
+        await self._clear_threads()
+        await self._refresh_threads_view()
         self._save_threads()
         if not loaded:
             # If the cached threads weren't loaded then hide those.
@@ -624,10 +639,13 @@ class ArchiveApp(App):
             # Mark the threads as read.
             self.push_screen(ThreadReadScreen(thread=item.item))
 
+    @work
     async def on_thread_updated(self, item):
         self._existing_threads[self.current_mailinglist.name][
             item.data['thread_id']
         ] = item.data
+        log(f'Received thread updated event for {item=} {item.data=}')
+        self._save_threads()
 
 
 class MailingLists(ListView):
