@@ -7,6 +7,7 @@ from .schemas import EmailsPage, MailingListPage, ThreadsPage
 __all__ = [
     'fetch_urls',
     'HyperkittyAPI',
+    'hyperkitty_client',
 ]
 
 
@@ -28,9 +29,9 @@ class HyperkittyAPI:
         url = f'{base_url}/api/lists?format=json'
         return await self._call(url, MailingListPage)
 
-    async def threads(self, ml):
+    async def threads(self, threads_url):
         """Given a ML object, return the threads for that Mailinglist."""
-        return await self._call(ml.get('threads'), ThreadsPage)
+        return await self._call(threads_url, ThreadsPage)
 
     async def emails(self, thread):
         return await self._call(thread.get('emails'), EmailsPage)
@@ -55,3 +56,6 @@ async def fetch_urls(urls, logger=None):
                 logger(resp)
                 failed.append(resp)
     return success, failed
+
+
+hyperktty_client = HyperkittyAPI()

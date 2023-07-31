@@ -25,6 +25,9 @@ class MailingList(orm.Model):
         'emails': orm.URL(max_length=1000),
     }
 
+    def __repr__(self):
+        return f'<Mailinglist ({self.url.split("/")[-2]})>'
+
 
 class Thread(orm.Model):
     tablename = 'thread'
@@ -39,9 +42,9 @@ class Thread(orm.Model):
         'starting_email': orm.URL(max_length=1000),
         'emails': orm.URL(max_length=1000),
         'votes_total': orm.Integer(),
-        'replies_total': orm.Integer(),
-        'next_thread': orm.URL(max_length=1000),
-        'prev_thread': orm.URL(max_length=1000),
+        'replies_count': orm.Integer(),
+        'next_thread': orm.URL(max_length=1000, allow_null=True),
+        'prev_thread': orm.URL(max_length=1000, allow_null=True),
     }
 
 
@@ -70,5 +73,5 @@ class Email(orm.Model):
         'sender': orm.ForeignKey(Sender),
         'subject': orm.String(max_length=5000),
         'date': orm.DateTime(),
-        'parent': orm.URL(max_length=1000),
+        'parent': orm.URL(max_length=1000, allow_null=True),
     }

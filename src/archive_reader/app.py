@@ -20,9 +20,17 @@ from textual.widgets import (
     Static,
 )
 from .hyperkitty import HyperkittyAPI, fetch_urls
-from .storage import SUBSCRIBED_ML, cache_get, cache_set
 from .models import initialize_database
-from .widgets import *
+from .widgets import (
+    rich_bold,
+    Threads,
+    MailingListItem,
+    MailingListChoose,
+    MailingLists,
+    ThreadItem,
+    Header,
+)
+from .core import ListManager, ThreadsManager
 
 hk = HyperkittyAPI()
 
@@ -104,7 +112,7 @@ class ThreadReadScreen(Screen):
 
     def compose(self) -> ComposeResult:
         header = Header()
-        header.text = self.thread.subject()
+        header.text = self.thread.subject
         yield header
         yield LoadingIndicator()
         with Horizontal(classes='main'):
@@ -116,7 +124,7 @@ class ThreadReadScreen(Screen):
     async def load_emails(self):
         # TODO: Don't assume the requests are going to pass always!!!
         log('Fetching Emails URLs')
-        replies, _ = await fetch_urls([self.thread.get('emails')], log)
+        replies, _ = await fetch_urls([self.thread.emails], log)
         reply_urls = [each.get('url') for each in replies[0].get('results')]
         log(f'Retrieved email urls {reply_urls}')
         replies, _ = await fetch_urls(reply_urls)
@@ -169,6 +177,11 @@ class MailingListAddScreen(Screen):
     """
     BINDINGS = [('escape', 'app.pop_screen', 'Pop screen')]
 
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.list_manager = ListManager()
+        self._list_cache = {}
+
     def compose(self):
         yield Static('Hyperkitty Server URL', classes='label')
         yield Input(placeholder='https://')
@@ -178,10 +191,10 @@ class MailingListAddScreen(Screen):
 
     @work(exclusive=True)
     async def update_mailinglists(self, base_url):
-        lists_json = await hk.lists(base_url)
+        lists_json = await self.list_manager.fetch_lists(base_url)
         selection_list = self.query_one(SelectionList)
         for ml in lists_json.get('results'):
-            cache_set(ml.get('name'), ml)
+            self._list_cache[ml.get('name')] = ml
             selection_list.add_option(
                 (
                     f"{ml.get('display_name')} <\"{ml.get('name')}\">",
@@ -194,7 +207,10 @@ class MailingListAddScreen(Screen):
         self.update_mailinglists(self.base_url)
 
     def on_mailing_list_choose_selected(self, message):
-        self.dismiss(message.data)
+        log(f'User chose {message.data=}')
+        self.dismiss(
+            [self._list_cache.get(listname) for listname in message.data]
+        )
 
 
 class ArchiveApp(App):
@@ -216,6 +232,8 @@ class ArchiveApp(App):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self._existing_threads = defaultdict(dict)
+        self.list_manager = ListManager()
+        self.thread_mgrs = {}
 
     def watch_show_tree(self, show_tree: bool) -> None:
         """Called when show_tree is modified."""
@@ -226,39 +244,27 @@ class ArchiveApp(App):
         yield Header(id='header')
         yield Vertical(MailingLists(id='lists'), id='lists-view')
         yield LoadingIndicator()
-        yield ListView(id='threads')
+        yield Threads(id='threads')
         yield Footer()
 
-    def on_mount(self):
+    async def on_mount(self):
         self._hide_loading()
-        self._load_subscribed_lists()
-
-    def _store_subscribed_lists(self, lists):
-        stored = cache_get(SUBSCRIBED_ML, [])
-        for each in lists:
-            if each not in stored:
-                stored.append(each)
-        cache_set(SUBSCRIBED_ML, stored)
+        await self._load_subscribed_lists()
 
     def action_add_mailinglist(self):
-        def get_lists(lists):
-            self._store_subscribed_lists(lists)
-            for ml in lists:
-                self._add_ml(ml)
+        async def subscribe_lists(lists):
+            list_objs = await self.list_manager.subscribe_lists(lists)
+            log(f'Subscribed list objects {list_objs}')
+            for ml in list_objs:
+                self._show_new_subscribed_lists(ml)
 
-        self.push_screen(MailingListAddScreen(), get_lists)
+        self.push_screen(MailingListAddScreen(), subscribe_lists)
 
-    def _add_ml(self, ml):
-        ml_json = cache_get(ml)
-        log(ml, ml_json)
-        if ml_json:
-            self.query_one(MailingLists).append(MailingList(ml_json))
-
-    def _load_subscribed_lists(self):
-        subscribed = cache_get(SUBSCRIBED_ML)
-        if subscribed:
-            for ml in subscribed:
-                self._add_ml(ml)
+    async def _load_subscribed_lists(self):
+        lists = await self.list_manager.lists()
+        list_view = self.query_one(MailingLists)
+        for list in lists:
+            await list_view.append(MailingListItem(list))
 
     def _show_loading(self):
         self.query_one(LoadingIndicator).display = True
@@ -286,39 +292,30 @@ class ArchiveApp(App):
         self._hide_loading()
         return len(existing_threads)
 
-    async def _refresh_threads_view(self):
-        """Update the Threads view with the threads that are defined in
-        self._existing_threads.
-        """
-        for _, thread in self._existing_threads.get(
-            self.current_mailinglist.name, {}
-        ).items():
-            log(f'{thread=}')
-            await self._set_thread(thread)
+    # async def _refresh_threads_view(self, threads):
+    #     """Update the Threads view with the threads that are defined in
+    #     self._existing_threads.
+    #     """
+    #     for thread in threads:
+    #         await self._set_thread(thread)
 
     async def _set_thread(self, thread):
         try:
-            threads_container = self.query_one('#threads', ListView)
+            threads_container = self.query_one('#threads', Threads)
         except NoMatches:
             # This can potentially happen when we have switched to a different
             # screen and we aren't able to find the `threads` in the current DOM.
             log(f'Failed to find threads_container when setting {thread}')
             return
         with suppress(DuplicateIds):
-            widget = Thread(
-                id=f"thread-{thread.get('thread_id')}",
-                thread_data=thread,
+            widget = ThreadItem(
+                id=f'thread-{thread.thread_id}',
+                thread=thread,
                 mailinglist=self.current_mailinglist,
             )
-            if widget not in threads_container.children:
-                await threads_container.append(widget)
-
-    def _save_threads(self):
-        ml = self.current_mailinglist
-        key = f'{ml.name}_threads'
-        log(f'Saving threads for {ml.name}')
-        saved = cache_set(key, self._existing_threads[ml.name])
-        log(f'Saved threads for {ml.name}: {saved}')
+            log(f'Created widget {widget} for {thread}')
+            await threads_container.append(widget)
+            log(f'Finished adding widget for {thread} to {threads_container}')
 
     async def _load_new_threads(self, threads):
         # Fetch all the threads loaded form the cache.
@@ -401,39 +398,45 @@ class ArchiveApp(App):
         header = self.query_one('#header', Header)
         header.text = ml.name
         await self._clear_threads()
-        self._show_loading()
-        # loaded = was some new cached threads loaded.
-        loaded = await self._load_saved_threads(ml.name)
-        threads = await hk.threads(ml._data)
-        # Then add all the new threads that were found.
-        list_threads = {}
-        for thread in threads.get('results'):
-            list_threads[thread.get('thread_id')] = thread
+        # self._show_loading()
+        # If a threads manager doesn't already exist, create a new.
+        if (mgr := self.thread_mgrs.get(ml.name)) is None:
+            mgr = ThreadsManager(ml)
+            self.thread_mgrs[ml.name] = mgr
+
+        threads = await mgr.threads()
         # Set the new threads in the view.
-        await self._load_new_threads(list_threads)
         await self._clear_threads()
-        await self._refresh_threads_view()
-        self._save_threads()
-        if not loaded:
-            # If the cached threads weren't loaded then hide those.
-            self._hide_loading()
+        # await self._refresh_threads_view(threads)
+        threads_container = self.query_one('#threads', Threads)
+        for thread in threads:
+            await self._set_thread(thread)
+            # widget = ThreadItem(
+            #     id=f"thread-{thread.thread_id}",
+            #     thread=thread,
+            #     mailinglist=self.current_mailinglist,
+            # )
+            # log(f'Adding widget {widget} for {thread} to {threads_container}')
+            # await threads_container.append(widget)
+        # If the cached threads weren't loaded then hide those.
+        # self._hide_loading()
         self._notify_update_complete()
 
     async def on_list_view_selected(self, item):
         # Handle the list item selected for MailingList.
-        if isinstance(item.item, MailingList):
-            self.current_mailinglist = item.item
+        if isinstance(item.item, MailingListItem):
+            self.current_mailinglist = item.item.mlist
             # Since update_threads runs in a worker, we don't need
             # to await the below.
-            self.update_threads(item.item)
-        elif isinstance(item.item, Thread):
+            self.update_threads(item.item.mlist)
+        elif isinstance(item.item, ThreadItem):
             item.item.read = True
             log(f'Thread {item.item} was selected.')
             # Make sure that we cancel the workers so that nothing will interfere after
             # we have moved on to the next screen.
             self.workers.cancel_all()
             # Mark the threads as read.
-            self.push_screen(ThreadReadScreen(thread=item.item))
+            self.push_screen(ThreadReadScreen(thread=item.item.thread))
 
     @work
     async def on_thread_updated(self, item):
@@ -445,6 +448,8 @@ class ArchiveApp(App):
 
 
 def main():
+    # Run the initialization routine in asyncio.run since the method
+    # is async and main is supposed to be sync method.
     asyncio.run(initialize_database())
     app = ArchiveApp()
     app.run()
