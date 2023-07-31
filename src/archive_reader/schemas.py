@@ -59,6 +59,7 @@ class EmailSchema(Schema):
     date = fields.DateTime()
     parent = fields.URL(load_default=None)
     children = fields.List(fields.Nested(fields.URL))
+    content = fields.Str()
 
 
 class EmailsPage(Schema):

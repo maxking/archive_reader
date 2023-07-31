@@ -249,3 +249,54 @@ class MailingListItem(ListItem):
 
     def get(self, key):
         return getattr(self.mlist, key)
+
+
+class EmailItem(ListItem):
+    """Email class represents rendering of a single Email.
+
+    This is currently used in the ThreadReadScreen() to render all the Emails
+    from the first one to the last one.
+
+    The JSON metadata from Hyperkitty is stored in the `email_contents` attr
+    of the instance. You can get the values of those using the `.get()` method.
+    """
+
+    DEFAULT_CSS = """
+    Email {
+        width: 1fr;
+        margin: 1 1;
+        height: auto;
+    }
+    Label {
+        padding: 1 2;
+    }
+    ListView > ListItem.--highlight {
+        background: $secondary-background-lighten-3 20%;
+    }
+    ListView:focus > ListItem.--highlight {
+        background: $secondary-background-lighten-3 50%;
+    }
+    """
+
+    def __init__(self, *args, email=None, **kw):
+        super().__init__(*args, **kw)
+        self.email = email
+
+    def get(self, attr):
+        return getattr(self.email, attr)
+
+    @property
+    def sender(self):
+        """Return the sender name"""
+        # TODO: Return the sender's address too.
+        return f"{self.get('sender_name')}"
+
+    @property
+    def message_id_hash(self):
+        return f"{self.get('message_id_hash')}"
+
+    def compose(self):
+        yield Static(rich_bold(f'From: {self.sender}'))
+        yield Static(rich_bold(f'Date: {self.get("date")}'))
+        yield Static()
+        yield Static(self.get('content'))

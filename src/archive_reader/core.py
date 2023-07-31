@@ -1,6 +1,8 @@
 """Core business logic."""
-from .models import MailingList, Thread
-from .hyperkitty import hyperktty_client
+import asyncio
+from textual import log
+from .models import MailingList, Thread, EmailManager
+from .hyperkitty import hyperktty_client, fetch_urls
 
 
 class ThreadsManager:
@@ -23,14 +25,35 @@ class ThreadsManager:
         """This is the top level Public API for this method. This
         will return threads for the Mailinglist this manager manages.
         """
-        return await self._load_from_db()
+        return await self._load_threads_from_db()
 
     async def update_threads(self):
         return await self._fetch_threads()
 
+    async def emails(self, thread):
+        """Return all the Emails for a give Thread."""
+        return await self._load_emails_from_db(thread=thread)
+
+    async def update_emails(self, thread):
+        """Load New Emails from remote."""
+        replies, _ = await fetch_urls([thread.emails], log)
+        reply_urls = [each.get('url') for each in replies[0].get('results')]
+        log(f'Retrieved email urls {reply_urls}')
+        replies, _ = await fetch_urls(reply_urls)
+        email_manager = EmailManager()
+        tasks = []
+        for reply in replies:
+            tasks.append(email_manager.create(reply))
+        results = await asyncio.gather(*tasks)
+        return [result[0] for result in results]
+
     # ================= Private API ================================
 
-    async def _load_from_db(self):
+    async def _load_emails_from_db(self, thread):
+        manager = EmailManager()
+        return await manager.filter(thread=thread.url).all()
+
+    async def _load_threads_from_db(self):
         """Load all the existing threads from the db."""
         return await Thread.objects.filter(mailinglist=self.ml.url).all()
 

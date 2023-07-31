@@ -1,5 +1,6 @@
 import databases
 import orm
+from sqlite3 import IntegrityError
 
 databases = databases.Database('sqlite:///db.sqlite')
 models = orm.ModelRegistry(database=databases)
@@ -54,7 +55,7 @@ class Sender(orm.Model):
     fields = {
         'id': orm.Integer(primary_key=True),
         'address': orm.String(max_length=500),
-        'mailman_id': orm.String(max_length=100),
+        'mailman_id': orm.String(max_length=100, unique=True),
         'emails': orm.URL(max_length=1000),
     }
 
@@ -74,4 +75,31 @@ class Email(orm.Model):
         'subject': orm.String(max_length=5000),
         'date': orm.DateTime(),
         'parent': orm.URL(max_length=1000, allow_null=True),
+        'content': orm.Text(),
     }
+
+
+class EmailManager:
+    """Manager class for constucting Email objects."""
+
+    async def create(self, json_data):
+        sender = json_data.get('sender')
+        try:
+            sender_obj = await Sender.objects.get_or_create(
+                mailman_id=sender.get('mailman_id'), defaults=sender
+            )
+            sender_obj = sender_obj[0]
+        except IntegrityError:
+            # This means we somehow got into a race condition since multiple
+            # get_or_create calls are running in async loops.
+            sender_obj = await Sender.objects.get(
+                mailman_id=sender.get('mailman_id'),
+            )
+        json_data['sender'] = sender_obj
+        return await Email.objects.get_or_create(
+            message_id_hash=json_data['message_id_hash'], defaults=json_data
+        )
+
+    get = Email.objects.get
+
+    filter = Email.objects.filter
