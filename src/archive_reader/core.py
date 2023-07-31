@@ -39,8 +39,16 @@ class ThreadsManager:
         replies, _ = await fetch_urls([thread.emails], log)
         reply_urls = [each.get('url') for each in replies[0].get('results')]
         log(f'Retrieved email urls {reply_urls}')
-        replies, _ = await fetch_urls(reply_urls)
         email_manager = EmailManager()
+        existing_emails = await EmailManager.filter(thread=thread.url).all()
+        existing_email_urls = set(email.url for email in existing_emails)
+        new_urls = list(
+            url for url in reply_urls if url not in existing_email_urls
+        )
+        if not new_urls:
+            # There are no updated.
+            return []
+        replies, _ = await fetch_urls(new_urls)
         tasks = []
         for reply in replies:
             tasks.append(email_manager.create(reply))
