@@ -6,11 +6,10 @@ authors = [
     {name = "Abhilash Raj", email = "raj.abhilash1@gmail.com"},
 ]
 dependencies = [
-    "textual",
+    "textual>=0.30.0",
     "httpx",
     "marshmallow",
     "timeago",
-    "diskcache",
     "orm[sqlite]>=0.3.1",
     "greenlet>=2.0.2",
 ]

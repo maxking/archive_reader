@@ -6,7 +6,7 @@ groups = ["default", "dependencies"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:44f9333cbd7a741145d659678ab3ed86f0f7a1d63612ff821ae18a422834a87f"
+content_hash = "sha256:95294581c2299bcd311ef2a8562de9826e1186c1a9803a50db6b191d6f63616c"
 
 [[package]]
 name = "aiohttp"
@@ -348,16 +348,6 @@ dependencies = [
 files = [
     {file = "databases-0.7.0-py3-none-any.whl", hash = "sha256:cf5da4b8a3e3cd038c459529725ebb64931cbbb7a091102664f20ef8f6cefd0d"},
     {file = "databases-0.7.0.tar.gz", hash = "sha256:ea2d419d3d2eb80595b7ceb8f282056f080af62efe2fb9bcd83562f93ec4b674"},
-]
-
-[[package]]
-name = "diskcache"
-version = "5.6.1"
-requires_python = ">=3"
-summary = "Disk Cache -- Disk and file backed persistent cache."
-files = [
-    {file = "diskcache-5.6.1-py3-none-any.whl", hash = "sha256:558c6a2d5d7c721bb00e40711803d6804850c9f76c426ed81ecc627fe9d2ce2d"},
-    {file = "diskcache-5.6.1.tar.gz", hash = "sha256:e4c978532feff5814c4cc00fe1e11e40501985946643d73220d41ee7737c72c3"},
 ]
 
 [[package]]
