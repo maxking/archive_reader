@@ -23,6 +23,9 @@ class ThreadsManager:
         """This is the top level Public API for this method. This
         will return threads for the Mailinglist this manager manages.
         """
+        return await self._load_from_db()
+
+    async def update_threads(self):
         return await self._fetch_threads()
 
     # ================= Private API ================================
