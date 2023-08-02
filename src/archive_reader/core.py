@@ -1,8 +1,13 @@
 """Core business logic."""
 import asyncio
+import httpx
 from textual import log
 from .models import MailingList, Thread, EmailManager
 from .hyperkitty import hyperktty_client, fetch_urls
+
+
+class RemoteURLFetchException(Exception):
+    """Exception fetching remote URLs."""
 
 
 class ThreadsManager:
@@ -19,6 +24,7 @@ class ThreadsManager:
 
     def __init__(self, mailinglist: MailingList) -> None:
         self.ml = mailinglist
+        self.email_mgr = EmailManager()
 
     # ================= Public API =================================
     async def threads(self):
@@ -36,11 +42,14 @@ class ThreadsManager:
 
     async def update_emails(self, thread):
         """Load New Emails from remote."""
-        replies, _ = await fetch_urls([thread.emails], log)
+        try:
+            replies, _ = await fetch_urls([thread.emails], log)
+        except httpx.ConnectError:
+            log(f'Failed to get Email URLs {thread.emails}')
+            raise RemoteURLFetchException(thread.emails)
         reply_urls = [each.get('url') for each in replies[0].get('results')]
         log(f'Retrieved email urls {reply_urls}')
-        email_manager = EmailManager()
-        existing_emails = await EmailManager.filter(thread=thread.url).all()
+        existing_emails = await self.email_mgr.filter(thread=thread.url)
         existing_email_urls = set(email.url for email in existing_emails)
         new_urls = list(
             url for url in reply_urls if url not in existing_email_urls
@@ -51,15 +60,14 @@ class ThreadsManager:
         replies, _ = await fetch_urls(new_urls)
         tasks = []
         for reply in replies:
-            tasks.append(email_manager.create(reply))
+            tasks.append(self.email_mgr.create(reply))
         results = await asyncio.gather(*tasks)
         return [result[0] for result in results]
 
     # ================= Private API ================================
 
     async def _load_emails_from_db(self, thread):
-        manager = EmailManager()
-        return await manager.filter(thread=thread.url).all()
+        return await self.email_mgr.filter(thread=thread.url)
 
     async def _load_threads_from_db(self):
         """Load all the existing threads from the db."""

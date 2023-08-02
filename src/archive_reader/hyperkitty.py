@@ -45,9 +45,7 @@ async def fetch_urls(urls, logger=None):
             tasks.append(
                 asyncio.ensure_future(client.get(url, follow_redirects=True))
             )
-
         results = await asyncio.gather(*tasks)
-
         for resp in results:
             if resp.status_code == 200:
                 success.append(resp.json())

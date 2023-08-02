@@ -241,7 +241,7 @@ class MailingListItem(ListItem):
         super().__init__()
 
     def render(self):
-        return repr(self.mlist)
+        return '{}\n{}'.format(self.get('display_name'), self.name)
 
     @property
     def name(self):
@@ -266,6 +266,7 @@ class EmailItem(ListItem):
         width: 1fr;
         margin: 1 1;
         height: auto;
+        padding: 2;
     }
     Label {
         padding: 1 2;

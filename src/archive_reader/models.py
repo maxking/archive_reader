@@ -102,4 +102,5 @@ class EmailManager:
 
     get = Email.objects.get
 
-    filter = Email.objects.filter
+    async def filter(self, *args, **kw):
+        return await Email.objects.filter(*args, **kw).all()

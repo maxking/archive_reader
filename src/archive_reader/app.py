@@ -31,139 +31,9 @@ from .widgets import (
     EmailItem,
 )
 from .core import ListManager, ThreadsManager
-
+from .screens import ThreadReadScreen, MailingListAddScreen
 
 DEFAULT_NOTIFY_TIMEOUT = 2
-
-
-class ThreadReadScreen(Screen):
-    """The main screen to read Email threads.
-
-    This is composed of multiple Emails, which are embedded inside a listview.
-    """
-
-    BINDINGS = [
-        ('escape', 'app.pop_screen', 'Close thread'),
-        ('r', 'update_emails', 'Refresh Emails'),
-    ]
-
-    DEFAULT_CSS = """
-    .main {
-        layout: grid;
-        grid-size: 2;
-        grid-columns: 9fr 1fr;
-    }
-    .sender {
-        padding: 0 1;
-    }
-    """
-
-    def __init__(self, *args, thread=None, thread_mgr=None, **kw):
-        self.thread = thread
-        self.thread_mgr = thread_mgr
-        super().__init__(*args, **kw)
-
-    def compose(self) -> ComposeResult:
-        header = Header()
-        header.text = self.thread.subject
-        yield header
-        yield LoadingIndicator()
-        with Horizontal(classes='main'):
-            yield ListView(id='thread-emails')
-            yield ListView(id='thread-authors')
-        yield Footer()
-
-    @work
-    async def load_emails(self):
-        reply_objs = await self.thread_mgr.emails(self.thread)
-        reply_emails = [
-            EmailItem(
-                email=reply,
-                id='message-id-{}'.format(reply.message_id_hash),
-            )
-            for reply in reply_objs
-        ]
-        try:
-            self.add_emails(reply_emails)
-            self.add_email_authors(reply_emails)
-        except Exception as ex:
-            log(ex)
-        self._hide_loading()
-
-    @work
-    async def action_update_emails(self):
-        await self.thread_mgr.update_emails(self.thread)
-        self.load_emails()
-        self.notify('Thread refresh complete.')
-
-    def add_emails(self, emails):
-        view = self.query_one('#thread-emails', ListView)
-        for email in emails:
-            view.append(email)
-
-    def add_email_authors(self, emails):
-        view = self.query_one('#thread-authors', ListView)
-        for email in emails:
-            view.append(ListItem(Static(f'{email.sender}', classes='sender')))
-
-    def on_mount(self):
-        self.load_emails()
-
-    def _show_loading(self):
-        self.query_one(LoadingIndicator).display = True
-
-    def _hide_loading(self):
-        self.query_one(LoadingIndicator).display = False
-
-
-class MailingListAddScreen(Screen):
-    """A new screen where you can search and subscribe to MailingLists.
-
-    This page will take the server as the input and load all the mailing lists on
-    that server.
-    """
-
-    DEFAULT_CSS = """
-    Screen {
-        align: center middle;
-    }
-    """
-    BINDINGS = [('escape', 'app.pop_screen', 'Pop screen')]
-
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-        self.list_manager = ListManager()
-        self._list_cache = {}
-
-    def compose(self):
-        yield Static('Hyperkitty Server URL', classes='label')
-        yield Input(placeholder='https://')
-        yield Static()
-        yield MailingListChoose(id='pick-mailinglist')
-        yield Footer()
-
-    @work(exclusive=True)
-    async def update_mailinglists(self, base_url):
-        lists_json = await self.list_manager.fetch_lists(base_url)
-        selection_list = self.query_one(SelectionList)
-        for ml in lists_json.get('results'):
-            self._list_cache[ml.get('name')] = ml
-            selection_list.add_option(
-                (
-                    f"{ml.get('display_name')} <\"{ml.get('name')}\">",
-                    ml.get('name'),
-                )
-            )
-
-    async def on_input_submitted(self, message: Input.Submitted):
-        self.base_url = message.value
-        self.update_mailinglists(self.base_url)
-
-    def on_mailing_list_choose_selected(self, message):
-        log(f'User chose {message.data=}')
-        self.dismiss(
-            [self._list_cache.get(listname) for listname in message.data]
-        )
 
 
 class ArchiveApp(App):
@@ -248,7 +118,6 @@ class ArchiveApp(App):
         threads_container = self.query_one('#threads', ListView)
         # First, clear the threads.
         clear_resp = threads_container.clear()
-        log(type(clear_resp))
         # .clear() returns an awaitable and gives the control back to
         # DOM to perform the action.
         await clear_resp
@@ -260,7 +129,6 @@ class ArchiveApp(App):
             timeout=DEFAULT_NOTIFY_TIMEOUT,
         )
         self.update_threads(self.current_mailinglist)
-        self._notify_update_complete()
 
     def _notify_update_complete(self):
         self.notify(
@@ -281,7 +149,7 @@ class ArchiveApp(App):
     @work()
     async def update_threads(self, ml):
         header = self.query_one('#header', Header)
-        header.text = ml.name
+        header.text = '{} ({})'.format(ml.display_name, ml.name)
         await self._clear_threads()
         self._show_loading()
         self.current_mailinglist = ml
@@ -312,7 +180,7 @@ class ArchiveApp(App):
             log(f'Thread {item.item} was selected.')
             # Make sure that we cancel the workers so that nothing will interfere after
             # we have moved on to the next screen.
-            self.workers.cancel_all()
+            # self.workers.cancel_all()
             # Mark the threads as read.
             self.push_screen(
                 ThreadReadScreen(
