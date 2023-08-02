@@ -42,3 +42,13 @@ Screen {
     height: 100%;
     background: blue;
 }
+
+
+.main {
+    layout: grid;
+    grid-size: 2;
+    grid-columns: 9fr 1fr;
+}
+.sender {
+    padding: 0 1;
+}

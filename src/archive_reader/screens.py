@@ -46,17 +46,6 @@ class ThreadReadScreen(Screen):
         ('r', 'update_emails', 'Refresh Emails'),
     ]
 
-    DEFAULT_CSS = """
-    .main {
-        layout: grid;
-        grid-size: 2;
-        grid-columns: 9fr 1fr;
-    }
-    .sender {
-        padding: 0 1;
-    }
-    """
-
     def __init__(self, *args, thread=None, thread_mgr=None, **kw):
         self.thread = thread
         self.thread_mgr = thread_mgr
@@ -80,12 +69,12 @@ class ThreadReadScreen(Screen):
         the (replies_count + 1, 1 for the starting_email), then invoke
         the API to call remote server to fetch new emails.
         """
-        stored_replies = await self.load_emails().wait()
+        stored_replies = await self.load_stored_emails().wait()
         if stored_replies < self.thread.replies_count + 1:
             self.action_update_emails()
 
     @work
-    async def load_emails(self, show_loading=True):
+    async def load_stored_emails(self, show_loading=True):
         """Load emails from Database and schedule emails to be fetched
         from remote if needed.
 
@@ -103,11 +92,7 @@ class ThreadReadScreen(Screen):
             )
             for reply in reply_objs
         ]
-        try:
-            self.add_emails(reply_emails)
-            self.add_email_authors(reply_emails)
-        except Exception as ex:
-            log(ex)
+        await self.add_emails_to_view(reply_emails)
         self._hide_loading()
         return len(reply_emails)
 
@@ -127,21 +112,23 @@ class ThreadReadScreen(Screen):
             )
             for reply in replies
         ]
-        try:
-            self.add_emails(reply_emails)
-            self.add_email_authors(reply_emails)
-        except Exception as ex:
-            log(ex)
+        await self.add_emails_to_view(reply_emails)
 
-    def add_emails(self, emails):
+    async def add_emails_to_view(self, emails):
         view = self.query_one('#thread-emails', ListView)
+        author_view = self.query_one('#thread-authors', ListView)
+        awaitables = []
         for email in emails:
-            view.append(email)
-
-    def add_email_authors(self, emails):
-        view = self.query_one('#thread-authors', ListView)
-        for email in emails:
-            view.append(ListItem(Static(f'{email.sender}', classes='sender')))
+            try:
+                awaitables.append(view.append(email))
+                awaitables.append(
+                    author_view.append(
+                        ListItem(Static(f'{email.sender}', classes='sender'))
+                    )
+                )
+            except Exception as ex:
+                log(ex)
+        await asyncio.gather(*awaitables)
 
     def _show_loading(self):
         self.query_one(LoadingIndicator).display = True
@@ -178,6 +165,14 @@ class MailingListAddScreen(Screen):
 
     @work(exclusive=True)
     async def update_mailinglists(self, base_url):
+        """Given a Hyperkitty remote URL, fetch and show MailingLists
+        in Selection list.
+
+        This also adds them to a dict, which is primarily used to
+        share data between this method and when the ML is actually
+        selected. We do this since SelectionList options can't include
+        the ML objects.
+        """
         lists_json = await self.list_manager.fetch_lists(base_url)
         selection_list = self.query_one(SelectionList)
         for ml in lists_json.get('results'):
@@ -190,10 +185,17 @@ class MailingListAddScreen(Screen):
             )
 
     async def on_input_submitted(self, message: Input.Submitted):
+        """Handle the Hyperkitty URL input from user.
+
+        This calls py:meth:`update_mailinglist` method which will
+        actually fetch all available lists and show to the user in a
+        selection list.
+        """
         self.base_url = message.value
         self.update_mailinglists(self.base_url)
 
     def on_mailing_list_choose_selected(self, message):
+        """Return the chosen mailinglist back to the previous screen."""
         log(f'User chose {message.data=}')
         self.dismiss(
             [self._list_cache.get(listname) for listname in message.data]
