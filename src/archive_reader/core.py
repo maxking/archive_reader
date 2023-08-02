@@ -83,7 +83,7 @@ class ThreadsManager:
         threads = await hyperktty_client.threads(self.ml.threads)
         thread_objs = []
         for thread in threads.get('results'):
-            obj = await Thread.objects.get_or_create(
+            obj = await Thread.objects.update_or_create(
                 thread_id=thread['thread_id'], defaults=thread
             )
             thread_objs.append(obj[0])
