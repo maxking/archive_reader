@@ -1,5 +1,5 @@
 [project]
-name = "archive_reader"
+name = "areader"
 version = "0.1.0"
 description = "Terminal based archives reader for Hyperkitty, GNU Mailman's archiver"
 authors = [
