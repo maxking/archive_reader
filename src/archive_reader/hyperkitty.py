@@ -22,7 +22,6 @@ class HyperkittyAPI:
         async with httpx.AsyncClient() as client:
             results = await client.get(url, follow_redirects=True)
         if results.status_code == 200:
-            # self._lists_json = {item.get("name"): item for item in results.json().get("results")}
             obj = schema()
             return obj.load(data=results.json())
         results.raise_for_status()
