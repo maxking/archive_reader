@@ -1,14 +1,9 @@
 import asyncio
-from contextlib import suppress
-from collections import defaultdict
 
 from textual import log, work
-from textual._node_list import DuplicateIds
-from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.css.query import NoMatches
+from textual.app import ComposeResult
+from textual.containers import Horizontal
 
-from textual.reactive import var
 from textual.screen import Screen
 from textual.widgets import (
     Footer,
@@ -19,18 +14,12 @@ from textual.widgets import (
     SelectionList,
     Static,
 )
-
-from .models import initialize_database
 from .widgets import (
-    Threads,
-    MailingListItem,
     MailingListChoose,
-    MailingLists,
-    ThreadItem,
     Header,
     EmailItem,
 )
-from .core import ListManager, ThreadsManager
+from .core import ListManager
 
 DEFAULT_NOTIFY_TIMEOUT = 2
 
