@@ -11,14 +11,15 @@ class RemoteURLFetchException(Exception):
 
 
 class ThreadsManager:
-    """The purpose of threads manager is to create Thread models
-    and deal with local storage into sqlite3 database.
+    """The purpose of threads manager is to create Thread model
+    objects and deal with their local storage into sqlite3 database.
 
     This provides a high level layer to the UI, which doesn't need
-    to be concerned anything about caching and such related mechanisms.
+    to be concerned about fetching, caching, storage and such related
+    mechanisms.
 
-    Each manager works typically for one mailinglist. Each list will
-    keep an instance of their ThreadsManager, which handles the
+    Each manager instance works typically for one mailinglist. Each
+    list will keep an instance of their ThreadsManager, which handles the
     fetching, caching etc for that list.
     """
 
@@ -57,6 +58,7 @@ class ThreadsManager:
         if not new_urls:
             # There are no updated.
             return []
+        log(f'Fetching {new_urls}')
         replies, _ = await fetch_urls(new_urls)
         tasks = []
         for reply in replies:

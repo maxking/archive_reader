@@ -72,18 +72,24 @@ class ThreadReadScreen(Screen):
             yield ListView(id='thread-authors')
         yield Footer()
 
-    def on_mount(self):
-        """Runs as soon as the Widget is mounted."""
-        self.load_emails()
-        self.action_update_emails()
+    async def on_mount(self):
+        """Runs as soon as the Widget is mounted.
+
+        It first loads the Emails for this thread that are stored in
+        the database. If total emails in the database is less than
+        the (replies_count + 1, 1 for the starting_email), then invoke
+        the API to call remote server to fetch new emails.
+        """
+        stored_replies = await self.load_emails().wait()
+        if stored_replies < self.thread.replies_count + 1:
+            self.action_update_emails()
 
     @work
     async def load_emails(self, show_loading=True):
         """Load emails from Database and schedule emails to be fetched
         from remote if needed.
 
-        TODO: We don't currently have the if-needed criteria working too
-        well since we don't yet compare the replies_count.
+        Since this is decorated with @work, this runs inside a worker.
         """
         if show_loading:
             self._show_loading()
@@ -103,9 +109,15 @@ class ThreadReadScreen(Screen):
         except Exception as ex:
             log(ex)
         self._hide_loading()
+        return len(reply_emails)
 
     @work
     async def action_update_emails(self):
+        """Fetch new emails in the existing thread in a worker.
+
+        This will ensure not to load email content that are already
+        loaded in database.
+        """
         replies = await self.thread_mgr.update_emails(self.thread)
         # self.load_emails(show_loading=False)
         reply_emails = [
@@ -120,7 +132,6 @@ class ThreadReadScreen(Screen):
             self.add_email_authors(reply_emails)
         except Exception as ex:
             log(ex)
-        self.notify('Thread refresh complete.')
 
     def add_emails(self, emails):
         view = self.query_one('#thread-emails', ListView)
