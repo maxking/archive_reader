@@ -1,11 +1,5 @@
-from collections import defaultdict
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from textual.app import ComposeResult
-
-import timeago
 from rich.console import RenderableType
-from textual import events, log
+from textual import events
 from textual.containers import ScrollableContainer
 from textual.message import Message
 from textual.reactive import reactive
@@ -83,6 +77,12 @@ class MailingListChoose(ScrollableContainer):
         )
 
     def on_button_pressed(self, event: Button.Pressed):
+        """Handle MailingList selected event.
+
+        This will simply post a MailingListChoose.Selected message, which will
+        be then handled by the handler in the ArchiveApp() to subscribe the
+        lists chosen by the user.
+        """
         if event.button.id == 'select_mailinglist':
             self.post_message(
                 self.Selected(self.query_one(SelectionList).selected)
@@ -91,37 +91,26 @@ class MailingListChoose(ScrollableContainer):
 
 
 class ThreadReplies(Widget):
+    """Represents total no. of messages in the Threads."""
 
+    #: Represents if this thread has new messages since it was
+    #: last opened. Currently this is un-used.
     has_new = reactive(0)
+    #: Total no of replies in the thread.
     count = reactive(0)
 
-    def __init__(self, count, has_new, *args, **kw):
+    def __init__(self, count, has_new=0, *args, **kw):
         super().__init__(*args, **kw)
         self.count = count
         self.has_new = has_new
 
     def render(self):
-        return f':speech_balloon: {self.count} ({self.has_new})'
+        return f':speech_balloon: {self.count}'
 
 
 class ThreadItem(ListItem):
     """Represents a thread on the Main screen."""
 
-    DEFAULT_CSS = """
-    ThreadItem {
-        height: 3;
-        width: 1fr;
-        layout: grid;
-        grid-size: 3;
-        grid-columns: 14fr 1fr 2fr;
-        content-align: left middle;
-        padding: 1 1;
-    }
-
-    .read {
-        background: gray;
-    }
-    """
     #: Represents whether this thread has been opened in the current
     #: reader before. This is computed locally and turned to 'read'
     #: as soon as the thread is opened.
@@ -145,6 +134,10 @@ class ThreadItem(ListItem):
             super().__init__()
 
     class Updated(Message):
+        """Represents an updated Event for the thread. This is sent
+        out so that any handlers that exist can refresh the view.
+        """
+
         def __init__(self, thread_data):
             self.data = thread_data
             super().__init__()
@@ -152,14 +145,12 @@ class ThreadItem(ListItem):
     def __init__(self, *args, thread=None, mailinglist=None, **kw) -> None:
         super().__init__(*args, **kw)
         self.mailinglist = mailinglist
-        # self.is_new = thread_data.get('is_new', False)
-        # self.has_new = thread_data.get('has_new', 0)
-        # self.read = thread_data.get('read', False)
         self.thread = thread
         if self.read:
             self.add_class('read')
 
     def get(self, attr):
+        """Get the attribute of the owned Thread object."""
         return getattr(self.thread, attr)
 
     @property
@@ -167,50 +158,16 @@ class ThreadItem(ListItem):
         return self.thread.subject
 
     def time_format(self):
+        """Return thread's active_time formatted properly to show in UI."""
         return self.thread.date_active
 
-    # def watch_read(self, old, new):
-    #     if old is False and new is True:
-    #         self.add_class('read')
-    #         # Regardless of the current value, just turn these two off since
-    #         # they are not required anymore.
-    #         self.is_new = False
-    #         self.has_new = 0
-    #         self.data['is_new'] = False
-    #         self.data['has_new'] = 0
-    #         self.data['read'] = True
-    #         self.read = True
-    #         log(f'Sending ThreadUpdated for {self}')
-    #         self._notify_updated()
-    #     self._save_read_status(new)
-
     def _notify_updated(self):
+        """Sends out Message for thread's updated event."""
         self.post_message(self.Updated(self.thread))
-
-    def _save_read_status(self, new):
-        # Update the thread.read() status in the storage.
-        # XXX(abraj): This is a relatively complex operation. The reason
-        # for which is the fact that we are using a caching solution as a
-        # trivial json database in a way that doesn't provide tons of data
-        # access patterns that we want to have.
-        # This can be solved easily with a local Sqlite database in future,
-        # infact, the current caching solution utilizes sqlite underneath.
-        pass
-
-    # def watch_has_new(self, _, new):
-    #     # It is possible that this is b
-    #     try:
-    #         self.query_one(ThreadReplies).has_new = new
-    #     except Exception:
-    #         log(f'Failed to Find & Update thread replies')
 
     def compose(self):
         yield Static(self.subject)
-        yield ThreadReplies(
-            count=self.thread.replies_count, has_new=self.has_new
-        )
-        # now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
-        thread_date = self.time_format()
+        yield ThreadReplies(count=self.thread.replies_count)
         yield Static(':two-thirty: {}'.format(self.get('date_active')))
 
     async def _on_click(self, _: events.Click) -> None:
@@ -259,24 +216,6 @@ class EmailItem(ListItem):
 
     The JSON metadata from Hyperkitty is stored in the `email_contents` attr
     of the instance. You can get the values of those using the `.get()` method.
-    """
-
-    DEFAULT_CSS = """
-    Email {
-        width: 1fr;
-        margin: 1 1;
-        height: auto;
-        padding: 2;
-    }
-    Label {
-        padding: 1 2;
-    }
-    ListView > ListItem.--highlight {
-        background: $secondary-background-lighten-3 20%;
-    }
-    ListView:focus > ListItem.--highlight {
-        background: $secondary-background-lighten-3 50%;
-    }
     """
 
     def __init__(self, *args, email=None, **kw):

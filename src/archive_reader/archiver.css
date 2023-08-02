@@ -52,3 +52,35 @@ Screen {
 .sender {
     padding: 0 1;
 }
+
+ThreadItem {
+    height: 3;
+    width: 1fr;
+    layout: grid;
+    grid-size: 3;
+    grid-columns: 14fr 1fr 2fr;
+    content-align: left middle;
+    padding: 1 1;
+}
+
+.read {
+    background: gray;
+}
+
+EmailItem {
+    width: 1fr;
+    margin: 1 1;
+    height: auto;
+    padding: 2;
+}
+Label {
+    padding: 1 2;
+}
+
+ListView > ListItem.--highlight {
+    background: $secondary-background-lighten-3 20%;
+}
+
+ListView:focus > ListItem.--highlight {
+    background: $secondary-background-lighten-3 50%;
+}

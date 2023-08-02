@@ -34,8 +34,8 @@ class ThreadsManager:
         """
         return await self._load_threads_from_db()
 
-    async def update_threads(self):
-        return await self._fetch_threads()
+    async def update_threads(self, offset):
+        return await self._fetch_threads(offset)
 
     async def emails(self, thread):
         """Return all the Emails for a give Thread."""
@@ -75,12 +75,14 @@ class ThreadsManager:
         """Load all the existing threads from the db."""
         return await Thread.objects.filter(mailinglist=self.ml.url).all()
 
-    async def _fetch_threads(self, page: int = 1):
+    async def _fetch_threads(self, offset: int = 0):
         """Fetch threads from the remote server.
 
         :param page: The page no. to fetch.
         """
-        threads = await hyperktty_client.threads(self.ml.threads)
+        threads = await hyperktty_client.threads(
+            self.ml.threads, offset=offset
+        )
         thread_objs = []
         for thread in threads.get('results'):
             obj = await Thread.objects.update_or_create(

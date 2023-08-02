@@ -5,30 +5,21 @@ from collections import defaultdict
 from textual import log, work
 from textual._node_list import DuplicateIds
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Vertical
 from textual.css.query import NoMatches
-
 from textual.reactive import var
-from textual.screen import Screen
 from textual.widgets import (
     Footer,
-    Input,
-    ListItem,
     ListView,
     LoadingIndicator,
-    SelectionList,
-    Static,
 )
-
 from .models import initialize_database
 from .widgets import (
     Threads,
     MailingListItem,
-    MailingListChoose,
     MailingLists,
     ThreadItem,
     Header,
-    EmailItem,
 )
 from .core import ListManager, ThreadsManager
 from .screens import ThreadReadScreen, MailingListAddScreen
@@ -46,6 +37,7 @@ class ArchiveApp(App):
         ('s', 'app.screenshot()', 'Screenshot'),
         ('q', 'quit', 'Quit'),
         ('u', 'load_new_threads', 'Update threads'),
+        ('m', 'more_threads', 'More threads'),
     ]
     TITLE = 'Archive Reader'
     SUB_TITLE = 'An app to reach Hyperkitty archives in Terminal!'
@@ -57,6 +49,7 @@ class ArchiveApp(App):
         self._existing_threads = defaultdict(dict)
         self.list_manager = ListManager()
         self.thread_mgrs = {}
+        self.thread_page = defaultdict(int)
 
     def watch_show_tree(self, show_tree: bool) -> None:
         """Called when show_tree is modified."""
@@ -150,7 +143,7 @@ class ArchiveApp(App):
     async def update_threads(self, ml):
         header = self.query_one('#header', Header)
         header.text = '{} ({})'.format(ml.display_name, ml.name)
-        await self._clear_threads()
+        # await self._clear_threads()
         self._show_loading()
         self.current_mailinglist = ml
         mgr = self.thread_mgr()
@@ -162,11 +155,12 @@ class ArchiveApp(App):
         self._notify_update_complete()
 
     @work()
-    async def action_load_new_threads(self):
+    async def action_load_new_threads(self, offset=0):
         ml = self.current_mailinglist
         mgr = self.thread_mgr()
-        await mgr.update_threads()
-        self.update_threads(ml)
+        new_threads = await mgr.update_threads(offset=offset)
+        for thread in new_threads:
+            await self._set_thread(thread)
 
     async def on_list_view_selected(self, item):
         # Handle the list item selected for MailingList.
@@ -187,6 +181,17 @@ class ArchiveApp(App):
                     thread=item.item.thread, thread_mgr=self.thread_mgr()
                 )
             )
+
+    async def action_more_threads(self):
+        """Load more threads for the Current Mailinglist."""
+        self.thread_page[self.current_mailinglist.name] += 1
+        threads_container = self.query_one('#threads', ListView)
+        self.action_load_new_threads(
+            offset=len(threads_container.children),
+        )
+        self.notify(
+            f'Loading more threads for {self.current_mailinglist.name}.'
+        )
 
     # @work
     # async def on_thread_updated(self, item):

@@ -10,6 +10,9 @@ __all__ = [
 ]
 
 
+DEFAULT_PAGINATION_COUNT = 25
+
+
 class HyperkittyAPI:
     """Hyperkitty is a client for Hyperkitty. It returns objects that can be
     used in the UI elements.
@@ -28,12 +31,18 @@ class HyperkittyAPI:
         url = f'{base_url}/api/lists?format=json'
         return await self._call(url, MailingListPage)
 
-    async def threads(self, threads_url):
+    async def threads(
+        self, threads_url, offset=1, limit=DEFAULT_PAGINATION_COUNT
+    ):
         """Given a ML object, return the threads for that Mailinglist."""
-        return await self._call(threads_url, ThreadsPage)
+        return await self._call(
+            f'{threads_url}&limit={limit}&offset={offset}', ThreadsPage
+        )
 
-    async def emails(self, thread):
-        return await self._call(thread.get('emails'), EmailsPage)
+    async def emails(self, thread, page=1, count=DEFAULT_PAGINATION_COUNT):
+        return await self._call(
+            f'{thread.emails}&page={page}&count={count}', EmailsPage
+        )
 
 
 async def fetch_urls(urls, logger=None):
