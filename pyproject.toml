@@ -1,6 +1,6 @@
 [project]
 name = "areader"
-version = "0.1.0"
+version = "0.1.1"
 description = "Terminal based archives reader for Hyperkitty, GNU Mailman's archiver"
 authors = [
     {name = "Abhilash Raj", email = "raj.abhilash1@gmail.com"},
