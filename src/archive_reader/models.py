@@ -1,8 +1,32 @@
 import databases
 import orm
 from sqlite3 import IntegrityError
+import os
+from pathlib import Path
 
-databases = databases.Database('sqlite:///db.sqlite')
+DATA_PATH_ENV_VAR = 'ARCHIVE_READER_DATA_DIR'
+#: https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
+#: According to freedesktop spec, this is the typical data path.
+XDG_DATA_ENV_VAR = 'XDG_DATA_HOME'
+DB_FILENAME = 'archive_reader.db'
+
+
+def get_db_path():
+    """Get the filesystem path where we should store the
+    database for local cache.
+    """
+    if dbpath := os.getenv(DATA_PATH_ENV_VAR):
+        dbpath = Path(dbpath)
+    elif xdg_home := os.getenv(XDG_DATA_ENV_VAR):
+        dbpath = Path(xdg_home) / 'archive_reader'
+    else:
+        dbpath = Path(os.getenv('HOME'), '.local', 'share', 'archive_reader')
+
+    dbpath.mkdir(exist_ok=True)
+    return str(dbpath / DB_FILENAME)
+
+
+databases = databases.Database(f'sqlite:///{get_db_path()}')
 models = orm.ModelRegistry(database=databases)
 
 
