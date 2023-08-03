@@ -1,7 +1,7 @@
 """Core business logic."""
 import asyncio
 import httpx
-from textual import log
+from .debug import log
 from .models import MailingList, Thread, EmailManager
 from .hyperkitty import hyperktty_client, fetch_urls
 

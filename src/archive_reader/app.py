@@ -2,7 +2,7 @@ import asyncio
 from contextlib import suppress
 from collections import defaultdict
 
-from textual import log, work
+from textual import work
 from textual._node_list import DuplicateIds
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
@@ -21,6 +21,7 @@ from .widgets import (
     ThreadItem,
     Header,
 )
+from .debug import log
 from .core import ListManager, ThreadsManager
 from .screens import ThreadReadScreen, MailingListAddScreen
 

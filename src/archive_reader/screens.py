@@ -1,6 +1,6 @@
 import asyncio
 
-from textual import log, work
+from textual import work
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 
@@ -20,6 +20,8 @@ from .widgets import (
     EmailItem,
 )
 from .core import ListManager
+from .debug import log
+
 
 DEFAULT_NOTIFY_TIMEOUT = 2
 
